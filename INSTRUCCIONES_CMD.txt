@@ -1,0 +1,77 @@
+## 🚀 INSTRUCCIONES RÁPIDAS – Instalación desde CMD (Windows)
+
+Sigue estos pasos si deseas instalar y ejecutar el proyecto **turn_dispenser** desde el símbolo del sistema (CMD).
+
+---
+
+### 1️⃣ Abrir CMD en la carpeta del proyecto
+1. Abre el Explorador de archivos y entra a la carpeta del proyecto, por ejemplo:
+   `D:\TESLA\turn_dispenser`
+2. En la barra de direcciones escribe `cmd` y presiona **ENTER**.
+
+Deberías ver algo así:
+```
+D:\TESLA\turn_dispenser>
+```
+
+---
+
+### 2️⃣ Crear el entorno virtual
+```cmd
+python -m venv venv
+```
+
+Esto creará una carpeta `venv` dentro del proyecto.
+
+---
+
+### 3️⃣ Activar el entorno virtual
+```cmd
+venv\Scripts\activate.bat
+```
+
+Cuando esté activado, tu línea de comandos mostrará algo como:
+```
+(venv) D:\TESLA\turn_dispenser>
+```
+
+---
+
+### 4️⃣ Instalar las dependencias
+Actualiza `pip` e instala Playwright:
+```cmd
+python -m pip install --upgrade pip
+pip install playwright
+```
+
+---
+
+### 5️⃣ Instalar los navegadores (solo Chromium)
+```cmd
+python -m playwright install chromium
+```
+
+---
+
+### 6️⃣ Verificar instalación
+```cmd
+python -m playwright --version
+```
+Debe mostrar algo como:
+```
+Playwright 1.48.0
+```
+
+---
+
+### 7️⃣ Ejecutar el script principal
+```cmd
+python app_test_playwright.py
+```
+
+Esto abrirá el navegador Chromium, cargará la página del RUNT y esperará que presiones ENTER para cerrarlo.
+
+---
+
+### ✅ Listo
+Ya puedes ejecutar el proyecto fácilmente desde CMD sin usar PowerShell.
