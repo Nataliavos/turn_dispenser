@@ -248,6 +248,120 @@ def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = Tru
     captcha_input = pick_first_working_locator(page, captcha_input_candidates, "campo de texto del CAPTCHA")
     captcha_input.fill(captcha_text)
 
+def check_and_handle_captcha_error(page, debug: bool = True) -> bool:
+    """
+    Detecta el popup de SweetAlert2 con el mensaje 'El captcha no es valido.'
+    y, si existe, hace clic en el botón 'Aceptar'.
+    Devuelve True si encontró y manejó el error, False si no había error de captcha.
+    """
+
+    # Popup principal de SweetAlert2
+    popup = page.locator("div.swal2-popup")
+    try:
+        popup.wait_for(state="visible", timeout=1500)
+    except TimeoutError:
+        # No hay popup visible → no hay error de captcha
+        return False
+    except Exception:
+        return False
+
+    # Leer el texto del popup (título + contenido)
+    try:
+        popup_text = popup.inner_text()
+    except Exception:
+        popup_text = ""
+
+    if debug:
+        print(f"🪧 Texto del popup SweetAlert2: {popup_text!r}")
+
+    # ¿Es el popup específico del captcha?
+    if not re.search(r"El\s+captcha\s+no\s+es\s+v[aá]lido", popup_text, re.I):
+        # Es otro mensaje cualquiera, no de captcha
+        return False
+
+    if debug:
+        print("❌ CAPTCHA incorrecto: popup 'El captcha no es valido.' detectado.")
+
+    # Intentar hacer clic en el botón Aceptar
+    try:
+        # Según tu HTML: <button class="swal2-confirm swal2-styled">Aceptar</button>
+        popup.locator("button.swal2-confirm").click()
+        if debug:
+            print("🧹 Botón 'Aceptar' (swal2-confirm) clickeado.")
+    except Exception:
+        # Fallback: buscar cualquier botón con texto Aceptar
+        try:
+            page.get_by_role("button", name=re.compile(r"Aceptar", re.I)).first.click()
+            if debug:
+                print("🧹 Botón 'Aceptar' clickeado (fallback get_by_role).")
+        except Exception:
+            if debug:
+                print("⚠ No se pudo hacer clic automáticamente en 'Aceptar'.")
+
+    # Dejar que se cierre el popup y se regenere el captcha
+    page.wait_for_timeout(800)
+    return True
+
+def check_and_handle_person_not_found(page, debug: bool = True) -> bool:
+    """
+    Detecta el popup de SweetAlert2 con el mensaje
+    'No se ha encontrado la persona en estado ACTIVA o SIN REGISTRO'
+    y, si existe, hace clic en 'Aceptar'.
+
+    Devuelve True si encontró y manejó ese caso (documento inexistente / sin registro),
+    False si no apareció ese mensaje.
+    """
+
+    # Popup principal de SweetAlert2
+    popup = page.locator("div.swal2-popup")
+    try:
+        popup.wait_for(state="visible", timeout=1500)
+    except TimeoutError:
+        # No hay popup visible → no hay error de "persona no encontrada"
+        return False
+    except Exception:
+        return False
+
+    # Leer el texto del popup (título + contenido)
+    try:
+        popup_text = popup.inner_text()
+    except Exception:
+        popup_text = ""
+
+    if debug:
+        print(f"🪧 Texto del popup SweetAlert2: {popup_text!r}")
+
+    # ¿Es el popup específico de persona no encontrada?
+    import re
+    patron_no_encontrada = re.compile(
+        r"No\s+se\s+ha\s+encontrado\s+la\s+persona\s+en\s+estado\s+ACTIVA\s+o\s+SIN\s+REGISTRO",
+        re.I,
+    )
+
+    if not patron_no_encontrada.search(popup_text or ""):
+        # Es otro mensaje diferente → no lo tratamos aquí
+        return False
+
+    if debug:
+        print("ℹ️ RUNT indica: 'No se ha encontrado la persona en estado ACTIVA o SIN REGISTRO'.")
+
+    # Intentar hacer clic en el botón Aceptar
+    try:
+        popup.locator("button.swal2-confirm").click()
+        if debug:
+            print("🧹 Botón 'Aceptar' (swal2-confirm) clickeado para cerrar el popup de 'sin registro'.")
+    except Exception:
+        try:
+            page.get_by_role("button", name=re.compile(r"Aceptar", re.I)).first.click()
+            if debug:
+                print("🧹 Botón 'Aceptar' clickeado (fallback get_by_role).")
+        except Exception:
+            if debug:
+                print("⚠ No se pudo hacer clic automáticamente en 'Aceptar' (sin registro).")
+
+    page.wait_for_timeout(800)
+    return True
+
 
 
 def click_consultar(page, debug: bool = True):
@@ -280,17 +394,19 @@ def run_runt_flow(
     slow_mo: int = 300,
     resolver_captcha=None,
     debug: bool = True,
-    hold_after: bool = False,   # 👈 nuevo parámetro
+    hold_after: bool = False,
 ):
     """
     Ejecuta todo el flujo:
       - Abre el navegador
       - Navega al RUNT
       - Llena tipo y número de documento
-      - Pide resolver CAPTCHA (vía resolver_captcha)
+      - Pide resolver CAPTCHA en un bucle hasta que sea correcto
       - Envía formulario
       - (Más adelante) lee el panel de resultados
     """
+    import re
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, slow_mo=slow_mo)
         context = browser.new_context()
@@ -310,20 +426,68 @@ def run_runt_flow(
         select_tipo_documento(page, tipo, debug=debug)
         fill_numero_documento(page, numero, debug=debug)
 
-        # CAPTCHA
-        try_capture_and_solve_captcha(page, resolver_captcha=resolver_captcha, debug=debug)
+        # ----------------------------------------------------
+        # BUCLE DE CAPTCHA: seguimos hasta que NO haya error
+        # ----------------------------------------------------
+        intentos = 0
+        LIMITE_SEGURIDAD = 20  # por si algo sale mal y no detectamos bien el error
 
-        # Enviar consulta
-        click_consultar(page, debug=debug)
+        while True:
+            intentos += 1
+            if debug:
+                print(f"🔁 Intento de CAPTCHA #{intentos}…")
 
+            if intentos > LIMITE_SEGURIDAD:
+                browser.close()
+                raise RuntimeError(
+                    "Se superó el límite de intentos de CAPTCHA (seguridad). "
+                    "Revisa si cambió el mensaje de error en el sitio."
+                )
+
+            # 1) Capturamos y resolvemos el captcha actual
+            try_capture_and_solve_captcha(page, resolver_captcha=resolver_captcha, debug=debug)
+
+            # 2) Enviamos la consulta
+            click_consultar(page, debug=debug)
+
+            # 3) Esperamos un poco a que el front responda
+            page.wait_for_timeout(1500)
+
+            # 4) ¿Apareció el popup 'El captcha no es valido.'?
+            if check_and_handle_captcha_error(page, debug=debug):
+                # Ya clickeamos 'Aceptar'; se generará un nuevo captcha.
+                # Volvemos al inicio del while: te pedirá uno nuevo.
+                continue
+
+            # Si llegamos aquí, asumimos que NO hubo error de captcha
+            if debug:
+                print("✅ No se detectó error de CAPTCHA; continuando flujo.")
+            break
+
+        # ----------------------------------------------------
+        # Después de un CAPTCHA válido verificamos si el RUNT
+        # respondió "persona no encontrada / sin registro"
+        # ----------------------------------------------------
+        if check_and_handle_person_not_found(page, debug=debug):
+            # No hay resultados para ese documento
+            if debug:
+                print("⚠ La persona no tiene registro ACTIVO en RUNT (o SIN REGISTRO).")
+            # Opcional: mantener la ventana abierta si quieres ver la pantalla
+            if hold_after and debug:
+                input("⏸ Documento sin registro. Presiona ENTER para cerrar el navegador…")
+            browser.close()
+            return False  # <- el flujo terminó, pero sin datos
+
+        # ----------------------------------------------------
+        # Aquí ya asumimos que la consulta se realizó bien
+        # (pendiente: parseo del panel de resultados)
+        # ----------------------------------------------------
         if debug:
-            print("⏳ Consulta enviada. (Pendiente: parseo de resultados)")
+            print("⏳ Consulta enviada satisfactoriamente. (Pendiente: parseo de resultados)")
 
-        # 🔴 Aquí decidimos si dejamos la ventana abierta para que la veas
         if hold_after:
             if debug:
                 input("⏸ Deja que carguen los resultados.\n   Presiona ENTER cuando quieras cerrar el navegador…")
 
         browser.close()
         return True
-

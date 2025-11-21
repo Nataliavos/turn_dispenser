@@ -23,16 +23,21 @@ class RuntController:
         y devuelve un modelo ResultadoRunt.
         """
         # Ejecutamos el flujo Playwright
-        run_runt_flow(
+        ok = run_runt_flow(
             tipo=params.tipo_documento,
             numero=params.numero_documento,
             headless=False,
             slow_mo=300,
             resolver_captcha=resolver_captcha,
             debug=debug,
-            hold_after=True,   # 👈 mantenemos el navegador abierto hasta que demos ENTER
+            hold_after=True,  # 👈 mantenemos el navegador abierto hasta que demos ENTER
         )
 
+        if not ok:
+            if debug:
+                print("⚠ Resultado: documento sin registro o persona no activa en RUNT.")
+            # Luego puedes reflejar esto en el modelo; por ahora devolvemos vacío.
+            return ResultadoRunt(raw_html=None)
 
         # Por ahora devolvemos un resultado "vacío".
         # Luego aquí metemos los datos scrapeados.
