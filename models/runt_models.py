@@ -13,3 +13,4 @@ class ResultadoRunt:
     estado_licencia: Optional[str] = None
     tiene_multas: Optional[bool] = None
     raw_html: Optional[str] = None
+    sin_registro: bool = False

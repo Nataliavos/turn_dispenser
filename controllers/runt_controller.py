@@ -30,7 +30,7 @@ class RuntController:
             slow_mo=300,
             resolver_captcha=resolver_captcha,
             debug=debug,
-            hold_after=True,  # 👈 mantenemos el navegador abierto hasta que demos ENTER
+            hold_after=True,  #  mantenemos el navegador abierto hasta que demos ENTER
         )
 
         if not ok:
