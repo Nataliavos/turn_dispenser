@@ -27,7 +27,6 @@ import re
 # Manejar rutas y archivos fácilmente (estándar)
 from pathlib import Path
 
-
 # URL principal del módulo de consulta ciudadana del RUNT
 RUNT_URL = "https://portalpublico.runt.gov.co/#/consulta-ciudadano-documento/consulta/consulta-ciudadano-documento"
 
@@ -135,7 +134,6 @@ def select_tipo_documento(page, codigo: str, debug: bool = True):
 
 
 
-
 def fill_numero_documento(page, numero: str, debug: bool = True):
     """
     Llena el número de documento en el input correspondiente.
@@ -163,9 +161,60 @@ def fill_numero_documento(page, numero: str, debug: bool = True):
     if debug:
         print(f"✅ Número de documento '{numero}' llenado.")
 
-        
 
-def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = True):
+def dismiss_autocomplete_popup(page, debug: bool = True):
+    """
+    Intenta cerrar el popup rosado de 'Hemos mejorado Autocompletar'
+    si está presente, para que no estorbe al captcha ni a otros elementos.
+
+    Si no se encuentra nada, simplemente sigue sin lanzar error.
+    """
+    try:
+        # Buscamos el texto principal del popup
+        popup = page.get_by_text(re.compile(r"Hemos mejorado\s+Autocompletar", re.I))
+        # Si no está visible, no hacemos nada
+        popup.wait_for(state="visible", timeout=3000)
+
+        if debug:
+            print("🩷 Popup de 'Autocompletar' detectado. Intentando cerrarlo…")
+
+        # Intentamos primero el botón de cerrar (la X)
+        close_candidates = [
+            lambda p: p.get_by_role("button", name=re.compile(r"cerrar|×|x", re.I)),
+            ".swal2-close",
+            # Como fallback, el botón "Quizás más tarde"
+            lambda p: p.get_by_role("button", name=re.compile(r"quiz[aá]s m[aá]s tarde", re.I)),
+        ]
+
+        btn_close = None
+        for cand in close_candidates:
+            try:
+                loc = cand(page) if callable(cand) else page.locator(cand)
+                loc.wait_for(state="visible", timeout=1500)
+                btn_close = loc
+                break
+            except Exception:
+                continue
+
+        if btn_close is not None:
+            btn_close.click()
+            if debug:
+                print("✅ Popup de 'Autocompletar' cerrado.")
+            page.wait_for_timeout(300)  # pequeño respiro
+        else:
+            if debug:
+                print("ℹ No se encontró botón claro para cerrar el popup, se continúa.")
+
+    except PWTimeoutError:
+        # No apareció el popup; todo bien
+        if debug:
+            print("ℹ No se detectó popup de 'Autocompletar'.")
+    except Exception as e:
+        if debug:
+            print(f"⚠ Error intentando cerrar popup de autocompletar: {e}")
+
+
+def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = True, timeout_ms: int = 45000):
     """
     - Busca la imagen del CAPTCHA.
     - La captura en bytes (screenshot).
@@ -174,61 +223,36 @@ def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = Tru
     - Si no se pasa resolver_captcha, por compatibilidad guarda
       captcha.png y pide input().
     """
-    import re
-
-    # Darle un pequeño tiempo a Angular para que pinte el captcha
-    page.wait_for_timeout(1500)
 
     if debug:
         print("🧩 Buscando imagen de CAPTCHA…")
 
-    # Selector basado en el HTML real:
-    # <img id="src" class="img-fluid" src="data:image/png;base64,...">
-    def img_after_text(p):
-        # Primer <img> que aparece después del texto del captcha
-        return p.get_by_text(
-            re.compile(r"Digite los caracteres presentados a continuación", re.I)
-        ).locator("xpath=following::img[1]")
-
+    # Selectores ajustados a la estructura que vimos
     captcha_img_candidates = [
-        # A) Selectores específicos del captcha actual
-        "img#src",                     # id="src"
-        "img.img-fluid",               # por si cambian el id
-        "img[src^='data:image']",      # src embebido en base64
-
-        # B) Basado en el texto que acompaña al captcha
-        img_after_text,
-
-        # C) Fallback bruto: último <img> en la página
-        lambda p: p.locator("xpath=(//img)[last()]"),
+        "div.divCaptcha img",
+        "img[alt*='captcha' i]",
+        "img[title*='captcha' i]",
+        "img[src^='data:image'][src*='captcha']",
+        lambda p: p.get_by_role("img", name=re.compile(r"captcha", re.I)),
     ]
 
+    captcha_img = pick_first_working_locator(page, captcha_img_candidates, "imagen de CAPTCHA")
+
+    # Intentamos capturar el screenshot con timeout controlado
     try:
-        captcha_img = pick_first_working_locator(page, captcha_img_candidates, "imagen de CAPTCHA")
-    except RuntimeError:
-        if debug:
-            print("⚠ No se encontró la imagen del CAPTCHA con los selectores previstos.")
-            # Mostrar info de las imágenes para depurar si algún día cambia el HTML
-            imgs = page.locator("img")
-            count = imgs.count()
-            print(f"   Hay {count} etiquetas <img> en la página:")
-            for i in range(min(count, 10)):
-                try:
-                    src = imgs.nth(i).get_attribute("src")
-                    alt = imgs.nth(i).get_attribute("alt")
-                    title = imgs.nth(i).get_attribute("title")
-                    print(f"   [{i}] src={src!r}, alt={alt!r}, title={title!r}")
-                except Exception:
-                    pass
-        raise
+        image_bytes = captcha_img.screenshot(timeout=timeout_ms)  # bytes en memoria
+    except PWTimeoutError:
+        # Aquí puedes decidir reintentar o fallar duro. Por ahora, fallamos con mensaje claro.
+        raise RuntimeError(
+            "No se pudo capturar la imagen del CAPTCHA a tiempo. "
+            "La página puede estar lenta o el componente cambió."
+        )
 
-    # Screenshot en memoria
-    image_bytes = captcha_img.screenshot()
-
-    # Pedir al usuario que resuelva el captcha
+    # -------- Resolver el texto del captcha --------
     if resolver_captcha is not None:
         captcha_text = resolver_captcha(image_bytes)
     else:
+        # Modo “legacy” consola: guardar PNG y pedir input aquí mismo
         tmp_path = Path("captcha.png").absolute()
         tmp_path.write_bytes(image_bytes)
         if debug:
@@ -238,15 +262,16 @@ def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = Tru
     if debug:
         print(f"🔐 CAPTCHA ingresado: '{captcha_text}'")
 
-    # Campo donde se escribe el texto del captcha
+    # -------- Escribir el captcha en el input correspondiente --------
     captcha_input_candidates = [
         "input[formcontrolname='captcha']",
         "input[name='captcha']",
-        lambda p: p.get_by_placeholder(re.compile(r"Ingrese.*captcha", re.I)),
-        lambda p: p.get_by_label(re.compile(r"Captcha", re.I)),
+        lambda p: p.get_by_placeholder(re.compile(r"Digite.*caracteres", re.I)),
+        lambda p: p.get_by_label(re.compile(r"captcha", re.I)),
     ]
     captcha_input = pick_first_working_locator(page, captcha_input_candidates, "campo de texto del CAPTCHA")
     captcha_input.fill(captcha_text)
+
 
 def check_and_handle_captcha_error(page, debug: bool = True) -> bool:
     """
@@ -401,8 +426,10 @@ def run_runt_flow(
       - Abre el navegador
       - Navega al RUNT
       - Llena tipo y número de documento
+      - Intenta cerrar el popup de Autocompletar (si aparece)
       - Pide resolver CAPTCHA en un bucle hasta que sea correcto
       - Envía formulario
+      - Detecta si no hay registro
       - (Más adelante) lee el panel de resultados
     """
     import re
@@ -421,10 +448,16 @@ def run_runt_flow(
         except PWTimeoutError:
             pass
 
+        # ----------------------------- 
+        # Llenar tipo + número
+        # -----------------------------
         if debug:
             print(f"📝 Seleccionando tipo='{tipo}' y llenando número='{numero}'…")
         select_tipo_documento(page, tipo, debug=debug)
         fill_numero_documento(page, numero, debug=debug)
+
+        # Intentar cerrar el popup rosado de “Hemos mejorado Autocompletar”
+        dismiss_autocomplete_popup(page, debug=debug)
 
         # ----------------------------------------------------
         # BUCLE DE CAPTCHA: seguimos hasta que NO haya error
@@ -445,7 +478,11 @@ def run_runt_flow(
                 )
 
             # 1) Capturamos y resolvemos el captcha actual
-            try_capture_and_solve_captcha(page, resolver_captcha=resolver_captcha, debug=debug)
+            try_capture_and_solve_captcha(
+                page,
+                resolver_captcha=resolver_captcha,
+                debug=debug
+            )
 
             # 2) Enviamos la consulta
             click_consultar(page, debug=debug)
@@ -472,11 +509,10 @@ def run_runt_flow(
             # No hay resultados para ese documento
             if debug:
                 print("⚠ La persona no tiene registro ACTIVO en RUNT (o SIN REGISTRO).")
-            # Opcional: mantener la ventana abierta si quieres ver la pantalla
             if hold_after and debug:
                 input("⏸ Documento sin registro. Presiona ENTER para cerrar el navegador…")
             browser.close()
-            return False  # <- el flujo terminó, pero sin datos
+            return False  # flujo terminó pero sin datos
 
         # ----------------------------------------------------
         # Aquí ya asumimos que la consulta se realizó bien
