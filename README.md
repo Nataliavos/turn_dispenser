@@ -1,88 +1,100 @@
-# 🌀 Turn Dispenser
+# 🌀 Turn Dispenser – Consulta Ciudadana RUNT
 
-Aplicación automatizada que interactúa con un navegador web para gestionar turnos en línea.  
-Actualmente desarrollada en **Python** usando **Playwright**, y diseñada para evolucionar hacia una **versión de escritorio**.
+Aplicación en **Python** (Playwright) con:
+- 🖥️ **Interfaz gráfica (PyQt6)** para consultar en el Portal Público del **RUNT**.
+- 💻 **Modo consola (CMD)** para pruebas rápidas.
 
----
-
-## 🚀 Requisitos previos
-
-Asegúrate de tener instalado en tu equipo:
-
-- [Python 3.10 o superior](https://www.python.org/downloads/)
-- [Git](https://git-scm.com/)
-- Un editor de código (por ejemplo, [VS Code](https://code.visualstudio.com/))
+El usuario ingresa tipo y número de documento y resuelve el **CAPTCHA manualmente** (requisito del portal).
 
 ---
 
-## ⚙️ Instalación
+## ✅ Características
 
-1. **Clona el repositorio:**
-   ```bash
-   git clone https://github.com/<tu_usuario>/<tu_repositorio>.git
-   cd turn_dispenser
+- Automatización con **Playwright**
+- CAPTCHA manual (CLI o GUI)
+- GUI multihilo (QThread) para no congelar la app
+- Arquitectura por capas: `controllers / services / models / views`
+- Base para parseo (`runt_parser.py`) y futuro guardado en DB
 
-2. Crea y activa el entorno virtual:
+---
 
-En Windows (PowerShell):
-python -m venv venv
-venv\Scripts\activate
-
-En Windows (CMD):
-python -m venv venv
-venv\Scripts\activate.bat
-
-En Linux/Mac:
-python3 -m venv venv
-source venv/bin/activate
-
-3. Instala las dependencias:
-pip install -r requirements.txt
-
-4. Instala los navegadores de Playwright:
-playwright install
-
-
-▶️ Ejecución del programa
-
-Para ejecutar el test principal (abrir el navegador y realizar la automatización):
-python test_browser.py
-
-⚠️ Si el navegador se cierra muy rápido, puedes usar el modo “slow motion” modificando
-slow_mo=1000 en el archivo test_browser.py (eso retrasa cada acción 1 segundo).
-
-🧩 Estructura del proyecto
+## 📁 Estructura del proyecto
 
 turn_dispenser/
 │
-├── test_browser.py          # Script principal de automatización
-├── app_test_playwright.py   # Archivo auxiliar (en desarrollo)
-├── requirements.txt         # Dependencias del proyecto
-├── .gitignore               # Archivos que no se suben al repositorio
-└── README.md                # Este archivo
+├── app.py # Entrada modo consola (CMD)
+├── app_gui.py # Entrada modo GUI (PyQt6)
+│
+├── controllers/
+│ └── runt_controller.py
+│
+├── models/
+│ └── runt_models.py
+│
+├── services/
+│ ├── runt_playwright.py
+│ └── runt_parser.py
+│
+├── views/
+│ ├── console_view.py
+│ └── gui_qt.py
+│
+├── requirements.txt
+├── README.md
+├── INSTRUCCIONES_CMD.txt
+└── WORKFLOW.md
 
-💡 Próximos pasos
 
- Implementar la interfaz de escritorio (Tkinter o PyQt)
+> Nota: archivos legacy (si existen) se recomienda moverlos a `legacy/` para no confundir.
 
- Automatizar ingreso de tipo y número de documento en el RUNT
+---
 
- Integrar lectura de datos desde Excel o base de datos
+## ⚙️ Requisitos
 
- Mejorar la gestión de errores y logs
+- Windows
+- Python 3.10+ instalado y agregado al PATH
+- Conexión a internet
 
- Añadir pruebas automatizadas
+---
 
- 👩‍💻 Autor
+## 🔧 Instalación (CMD)
 
-Natalia Vargas Osorio
-📍 Medellín, Colombia
-💻 Técnica en Desarrollo de Software
-📚 Aprendizaje en curso: Python, JavaScript, React, Node.js
+1) Abre **CMD** en la carpeta del proyecto (ejemplo):
+```txt
+D:\TESLA\turn_dispenser>
 
-🔗 Perfil de GitHub
+```cmd
 
-📝 Licencia
+2) Crea el entorno virtual:
+python -m venv venv
 
-Este proyecto se distribuye bajo la licencia MIT, lo que significa que puedes usarlo, copiarlo y modificarlo libremente, siempre que mantengas el crédito correspondiente.
+3) Actívalo:
+venv\Scripts\activate.bat
 
+4) Instala dependencias:
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+5) Instala Chromium de Playwright:
+python -m playwright install chromium
+
+
+▶️ Ejecución (CMD)
+
+GUI entorno gráfico (recomendado):
+python app_gui.py
+
+Consola:
+python app.py --tipo CC --numero 1017259440
+
+
+⚠️ Nota importante
+Este proyecto no evade mecanismos de seguridad.
+El CAPTCHA se resuelve manualmente por el usuario.
+
+🧭 Estado
+✅ Automatización + CAPTCHA OK
+✅ GUI funcional
+⏳ Parseo completo de resultados (en progreso)
+⏳ Persistencia en base de datos (pendiente)
+⏳ Barrido controlado (pendiente)

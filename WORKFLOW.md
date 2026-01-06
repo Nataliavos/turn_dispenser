@@ -1,65 +1,50 @@
-# 🧭 WORKFLOW – Proyecto turn_dispenser
 
-Guía práctica para iniciar y cerrar tu jornada de desarrollo en el proyecto **turn_dispenser**  
-(Estructura basada en Python + Playwright + entorno virtual)
+
+🧭 Guía práctica para trabajar día a día usando **CMD**.
 
 ---
 
-## 🚀 CHECKLIST DE INICIO DIARIO
+## 🚀 INICIO DE JORNADA (CMD)
 
-### 1. Abre tu proyecto
-En PowerShell o terminal:
-```bash
-cd Desktop/turn_dispenser
+1) Abrir el proyecto
+```cmd
+cd /d D:\TESLA\turn_dispenser
 
+2) Abrir el proyecto
+venv\Scripts\activate.bat
 
-2. Activa el entorno virtual
-venv\Scripts\activate
-Verás (venv) al inicio de la línea.
-
-3. Actualiza el entorno (si trabajas desde otro PC o hubo cambios)
+3) Instalar / sincronizar dependencias
 pip install -r requirements.txt
 
-4. Comprueba que Playwright está listo
-python -m playwright install
+4) Verificar Playwright (Chromium)
+python -m playwright install chromium
 
-5. Abre tu IDE o ejecuta el script principal
-python test_browser.py
-Usa este paso para probar el funcionamiento de tu automatización.
-
+5) Ejecutar
+python app_gui.py
 
 
-✅ CHECKLIST DE FIN DE JORNADA
-1. Guarda tu trabajo
+🧪 DURANTE EL DESARROLLO
 
-Asegúrate de que todos los archivos están guardados en tu IDE.
+- Probar primero en GUI (python app_gui.py)
+- Mantener Playwright en services/runt_playwright.py (solo automatización)
+- Mantener parseo en services/runt_parser.py
+- Mantener lógica de orquestación en controllers/runt_controller.py
 
-2. Verifica los cambios realizados
+✅ FIN DE JORNADA (CMD)
+
+1. Revisar cambios
 git status
-Revisa qué archivos cambiaste o agregaste.
 
-3. Actualiza el control de versiones
-git add README.md requirements.txt app_test_playwright.py test_browser.py
-git commit -m "Describe brevemente lo que hiciste hoy"
+2. Guardar cambios
+git add .
+git commit -m "Describe lo que hiciste"
 git push
 
-💡 Si instalaste nuevos paquetes con pip:
+3. Si cambiaste dependencias
 pip freeze > requirements.txt
 git add requirements.txt
 git commit -m "Actualiza dependencias"
 git push
 
-4. Verifica que todo esté limpio
-git status
-
-5. Cierra el entorno virtual
+4. Cerrar entorno virtual
 deactivate
-
-📘 Consejo:
-Si cambias de equipo, recuerda que solo necesitas:
-
-Clonar el repositorio desde GitHub
-
-Instalar dependencias con pip install -r requirements.txt
-
-Ejecutar python -m playwright install una sola vez para descargar los navegadores.

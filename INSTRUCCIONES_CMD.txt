@@ -1,77 +1,60 @@
-## 🚀 INSTRUCCIONES RÁPIDAS – Instalación desde CMD (Windows)
-
-Sigue estos pasos si deseas instalar y ejecutar el proyecto **turn_dispenser** desde el símbolo del sistema (CMD).
 
 ---
 
-### 1️⃣ Abrir CMD en la carpeta del proyecto
-1. Abre el Explorador de archivos y entra a la carpeta del proyecto, por ejemplo:
-   `D:\TESLA\turn_dispenser`
-2. En la barra de direcciones escribe `cmd` y presiona **ENTER**.
+# ✅ INSTRUCCIONES_CMD.txt (100% CMD)
 
-Deberías ver algo así:
-```
+```txt
+🚀 INSTRUCCIONES – Instalación y ejecución en CMD (Windows)
+Proyecto: turn_dispenser
+----------------------------------------------------------
+
+1) Abrir CMD en la carpeta del proyecto
+Ejemplo:
 D:\TESLA\turn_dispenser>
-```
 
----
+Tip: En el explorador, entra a la carpeta del proyecto, escribe "cmd" en la barra de direcciones y ENTER.
 
-### 2️⃣ Crear el entorno virtual
-```cmd
+----------------------------------------------------------
+
+2) Crear entorno virtual (solo una vez)
 python -m venv venv
-```
 
-Esto creará una carpeta `venv` dentro del proyecto.
+----------------------------------------------------------
 
----
-
-### 3️⃣ Activar el entorno virtual
-```cmd
+3) Activar entorno virtual (CMD)
 venv\Scripts\activate.bat
-```
 
-Cuando esté activado, tu línea de comandos mostrará algo como:
-```
+Si quedó bien, verás:
 (venv) D:\TESLA\turn_dispenser>
-```
 
----
+----------------------------------------------------------
 
-### 4️⃣ Instalar las dependencias
-Actualiza `pip` e instala Playwright:
-```cmd
+4) Instalar dependencias
 python -m pip install --upgrade pip
-pip install playwright
-```
+pip install -r requirements.txt
 
----
+----------------------------------------------------------
 
-### 5️⃣ Instalar los navegadores (solo Chromium)
-```cmd
+5) Instalar navegador Playwright (Chromium)
 python -m playwright install chromium
-```
 
----
+----------------------------------------------------------
 
-### 6️⃣ Verificar instalación
-```cmd
-python -m playwright --version
-```
-Debe mostrar algo como:
-```
-Playwright 1.48.0
-```
+6) Ejecutar el programa
 
----
+✅ GUI (recomendado):
+python app_gui.py
 
-### 7️⃣ Ejecutar el script principal
-```cmd
-python app_test_playwright.py
-```
+✅ Consola:
+python app.py --tipo CC --numero 1017259440
 
-Esto abrirá el navegador Chromium, cargará la página del RUNT y esperará que presiones ENTER para cerrarlo.
+----------------------------------------------------------
 
----
+7) CAPTCHA
+- En consola: se guarda captcha.png y te pide el texto.
+- En GUI: sale una ventana con la imagen y campo para escribir.
 
-### ✅ Listo
-Ya puedes ejecutar el proyecto fácilmente desde CMD sin usar PowerShell.
+----------------------------------------------------------
+
+8) Cerrar el entorno virtual (opcional)
+deactivate
