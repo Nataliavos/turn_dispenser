@@ -1,15 +1,12 @@
-# controllers/runt_controller.py
-
 from typing import Callable, Optional
 from models.runt_models import ConsultaRuntParams, ResultadoRunt
 from services.runt_playwright import run_runt_flow
+from services.runt_parser import parse_runt_html  # ✅ nuevo
 
-# Tipo para la función que resuelve el captcha
 ResolverCaptcha = Callable[[bytes], str]
 
 class RuntController:
     def __init__(self):
-        # Aquí luego podremos inyectar repositorios de BD, etc.
         pass
 
     def consultar_ciudadano(
@@ -20,25 +17,59 @@ class RuntController:
     ) -> ResultadoRunt:
         """
         Orquesta la consulta: recibe params de la vista, llama al servicio,
-        y devuelve un modelo ResultadoRunt.
+        parsea resultados y devuelve un ResultadoRunt.
         """
-        # Ejecutamos el flujo Playwright
-        ok = run_runt_flow(
+
+        html = run_runt_flow(
             tipo=params.tipo_documento,
             numero=params.numero_documento,
             headless=False,
             slow_mo=300,
             resolver_captcha=resolver_captcha,
             debug=debug,
-            hold_after=True,  #  mantenemos el navegador abierto hasta que demos ENTER
+            hold_after=False,  # recomendado: no bloquear aquí; la GUI ya gestiona la UX
         )
 
-        if not ok:
+        # ✅ Caso SIN REGISTRO
+        if html is None:
             if debug:
                 print("⚠ Resultado: documento sin registro o persona no activa en RUNT.")
-            # Luego puedes reflejar esto en el modelo; por ahora devolvemos vacío.
-            return ResultadoRunt(raw_html=None)
+            return ResultadoRunt(raw_html=None, sin_registro=True)
 
-        # Por ahora devolvemos un resultado "vacío".
-        # Luego aquí metemos los datos scrapeados.
-        return ResultadoRunt()
+        # ✅ Parseo
+        parsed = parse_runt_html(html)
+        secciones = parsed.get("secciones", {}) or {}
+
+        # ✅ Detección simple de multas (si existe sección y trae algo)
+        # Nota: el título exacto puede variar; intentamos varias claves tolerantes
+        posibles_multas_keys = [
+            "MULTAS E INFRACCIONES",
+            "MULTAS",
+            "INFRACCIONES",
+        ]
+        multas_data = None
+        for k in posibles_multas_keys:
+            if k in secciones:
+                multas_data = secciones.get(k)
+                break
+
+        tiene_multas = None
+        if multas_data is None:
+            tiene_multas = False
+        else:
+            # si es lista con al menos un item o dict con algún contenido, asumimos que sí hay info
+            if isinstance(multas_data, list):
+                tiene_multas = len(multas_data) > 0
+            elif isinstance(multas_data, dict):
+                tiene_multas = len(multas_data) > 0
+            else:
+                tiene_multas = bool(str(multas_data).strip())
+
+        return ResultadoRunt(
+            nombre=parsed.get("nombre_completo"),
+            estado_licencia=parsed.get("estado_conductor"),
+            tiene_multas=tiene_multas,
+            secciones=secciones,
+            raw_html=html,
+            sin_registro=False,
+        )

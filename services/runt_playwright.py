@@ -284,7 +284,7 @@ def check_and_handle_captcha_error(page, debug: bool = True) -> bool:
     popup = page.locator("div.swal2-popup")
     try:
         popup.wait_for(state="visible", timeout=1500)
-    except TimeoutError:
+    except PWTimeoutError:
         # No hay popup visible → no hay error de captcha
         return False
     except Exception:
@@ -341,7 +341,7 @@ def check_and_handle_person_not_found(page, debug: bool = True) -> bool:
     popup = page.locator("div.swal2-popup")
     try:
         popup.wait_for(state="visible", timeout=1500)
-    except TimeoutError:
+    except PWTimeoutError:
         # No hay popup visible → no hay error de "persona no encontrada"
         return False
     except Exception:
@@ -409,6 +409,104 @@ def click_consultar(page, debug: bool = True):
 
 
 
+def expand_all_panels_and_wait_data(page, debug: bool = False, settle_ms: int = 800) -> None:
+    """
+    Expande todos los mat-expansion-panel del acordeón y espera a que Angular renderice
+    el contenido (tablas/labels/valores) dentro de cada panel.
+
+    Esto es clave porque muchas secciones NO renderizan filas/valores hasta que el panel
+    se expande (lazy rendering).
+    """
+    def log(msg: str) -> None:
+        if debug:
+            print(msg)
+
+    # Asegura que existan panels en DOM (aunque sea sin datos)
+    try:
+        page.wait_for_selector("mat-expansion-panel", timeout=8000)
+    except Exception:
+        log("⚠ No se encontraron mat-expansion-panel para expandir.")
+        return
+
+    panels = page.locator("mat-expansion-panel")
+    total = panels.count()
+    log(f"🔎 Panels encontrados: {total}")
+
+    for i in range(total):
+        panel = panels.nth(i)
+        header = panel.locator("mat-expansion-panel-header")
+
+        # Título del panel (solo para debug)
+        title = ""
+        try:
+            title = header.locator(".panel-title-text").inner_text(timeout=500)
+            title = title.strip()
+        except Exception:
+            pass
+
+        # ¿Está expandido?
+        expanded = None
+        try:
+            expanded = header.get_attribute("aria-expanded")
+        except Exception:
+            expanded = None
+
+        if expanded != "true":
+            try:
+                log(f"➡ Expandiendo panel #{i+1}/{total} {('— ' + title) if title else ''}")
+                header.scroll_into_view_if_needed()
+                header.click()
+            except Exception as e:
+                log(f"⚠ No se pudo expandir panel #{i+1}: {e}")
+                continue
+
+        # Espera a que el contenido del panel exista (region body)
+        # Cada panel suele tener un div con role="region" mat-expansion-panel-content
+        try:
+            panel.locator(".mat-expansion-panel-content").wait_for(state="visible", timeout=3000)
+        except Exception:
+            # Algunos quedan visibles pero sin height; aún así, damos tiempo a render.
+            pass
+
+        # Espera un poco para que Angular pinte el contenido real.
+        # Esto ayuda para: tablas mat-table, forms con <b>, etc.
+        page.wait_for_timeout(250)
+
+        # Espera a que Angular renderice filas reales, valores o mensaje "Sin información"
+        try:
+            handle = panel.element_handle()
+            if handle:
+                page.wait_for_function(
+                    """(panel) => {
+                        // 1) Tablas con filas
+                        const hasRows = panel.querySelectorAll('tbody tr').length > 0;
+
+                        // 2) Valores en <b> (formularios tipo Multas / Validación)
+                        const hasBoldValues = Array.from(panel.querySelectorAll('b'))
+                            .some(b => b.innerText && b.innerText.trim().length > 0);
+
+                        // 3) Mensajes explícitos de vacío
+                        const txt = panel.innerText.toLowerCase();
+                        const hasEmptyMsg =
+                            txt.includes('sin información') ||
+                            txt.includes('no se encontró información');
+
+                        return hasRows || hasBoldValues || hasEmptyMsg;
+                    }""",
+                    arg=handle,
+                    timeout=6000
+                )
+        except Exception:
+            pass
+
+
+
+    # Tiempo final para que todo “asiente”
+    page.wait_for_timeout(settle_ms)
+    log("✅ Todos los panels fueron procesados (expand/settle).")
+
+
+
 # ------------------------------------------------------------
 # FUNCIÓN PRINCIPAL: flujo completo del RUNT
 # ------------------------------------------------------------
@@ -420,7 +518,7 @@ def run_runt_flow(
     resolver_captcha=None,
     debug: bool = True,
     hold_after: bool = False,
-):
+) -> str | None:
     """
     Ejecuta todo el flujo:
       - Abre el navegador
@@ -430,100 +528,126 @@ def run_runt_flow(
       - Pide resolver CAPTCHA en un bucle hasta que sea correcto
       - Envía formulario
       - Detecta si no hay registro
-      - (Más adelante) lee el panel de resultados
+      - Si hay resultados, retorna el HTML completo de la página
+    Retorna:
+      - str: HTML completo cuando la consulta fue exitosa
+      - None: cuando la persona está SIN REGISTRO / no activa
     """
-    import re
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, slow_mo=slow_mo)
         context = browser.new_context()
         page = context.new_page()
 
-        if debug:
-            print("🌐 Abriendo portal del RUNT…")
-        page.goto(RUNT_URL, timeout=60000)
-
         try:
-            page.wait_for_load_state("networkidle", timeout=10000)
-        except PWTimeoutError:
-            pass
-
-        # ----------------------------- 
-        # Llenar tipo + número
-        # -----------------------------
-        if debug:
-            print(f"📝 Seleccionando tipo='{tipo}' y llenando número='{numero}'…")
-        select_tipo_documento(page, tipo, debug=debug)
-        fill_numero_documento(page, numero, debug=debug)
-
-        # Intentar cerrar el popup rosado de “Hemos mejorado Autocompletar”
-        dismiss_autocomplete_popup(page, debug=debug)
-
-        # ----------------------------------------------------
-        # BUCLE DE CAPTCHA: seguimos hasta que NO haya error
-        # ----------------------------------------------------
-        intentos = 0
-        LIMITE_SEGURIDAD = 20  # por si algo sale mal y no detectamos bien el error
-
-        while True:
-            intentos += 1
             if debug:
-                print(f"🔁 Intento de CAPTCHA #{intentos}…")
+                print("🌐 Abriendo portal del RUNT…")
+            page.goto(RUNT_URL, timeout=60000)
 
-            if intentos > LIMITE_SEGURIDAD:
-                browser.close()
-                raise RuntimeError(
-                    "Se superó el límite de intentos de CAPTCHA (seguridad). "
-                    "Revisa si cambió el mensaje de error en el sitio."
+            # Angular a veces no llega a networkidle; no lo tratamos como fatal
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except PWTimeoutError:
+                pass
+
+            # -----------------------------
+            # Llenar tipo + número
+            # -----------------------------
+            if debug:
+                print(f"📝 Seleccionando tipo='{tipo}' y llenando número='{numero}'…")
+            select_tipo_documento(page, tipo, debug=debug)
+            fill_numero_documento(page, numero, debug=debug)
+
+            # Intentar cerrar popup “Hemos mejorado Autocompletar”
+            dismiss_autocomplete_popup(page, debug=debug)
+
+            # ----------------------------------------------------
+            # BUCLE DE CAPTCHA: seguimos hasta que NO haya error
+            # ----------------------------------------------------
+            intentos = 0
+            LIMITE_SEGURIDAD = 20  # por si algo sale mal y no detectamos bien el error
+
+            while True:
+                intentos += 1
+                if debug:
+                    print(f"🔁 Intento de CAPTCHA #{intentos}…")
+
+                if intentos > LIMITE_SEGURIDAD:
+                    raise RuntimeError(
+                        "Se superó el límite de intentos de CAPTCHA (seguridad). "
+                        "Revisa si cambió el mensaje de error en el sitio."
+                    )
+
+                # 1) Capturar y resolver captcha actual
+                try_capture_and_solve_captcha(
+                    page,
+                    resolver_captcha=resolver_captcha,
+                    debug=debug,
                 )
 
-            # 1) Capturamos y resolvemos el captcha actual
-            try_capture_and_solve_captcha(
-                page,
-                resolver_captcha=resolver_captcha,
-                debug=debug
-            )
+                # 2) Enviar consulta
+                click_consultar(page, debug=debug)
 
-            # 2) Enviamos la consulta
-            click_consultar(page, debug=debug)
+                # 3) Espera breve para que responda el front
+                page.wait_for_timeout(1500)
 
-            # 3) Esperamos un poco a que el front responda
-            page.wait_for_timeout(1500)
+                # 4) ¿Captcha inválido?
+                if check_and_handle_captcha_error(page, debug=debug):
+                    # Se generará uno nuevo; volvemos a intentar
+                    continue
 
-            # 4) ¿Apareció el popup 'El captcha no es valido.'?
-            if check_and_handle_captcha_error(page, debug=debug):
-                # Ya clickeamos 'Aceptar'; se generará un nuevo captcha.
-                # Volvemos al inicio del while: te pedirá uno nuevo.
-                continue
+                if debug:
+                    print("✅ No se detectó error de CAPTCHA; continuando flujo.")
+                break
 
-            # Si llegamos aquí, asumimos que NO hubo error de captcha
+            # ----------------------------------------------------
+            # Verificar "persona no encontrada / sin registro"
+            # ----------------------------------------------------
+            if check_and_handle_person_not_found(page, debug=debug):
+                if debug:
+                    print("⚠ La persona no tiene registro ACTIVO en RUNT (o SIN REGISTRO).")
+                if hold_after and debug:
+                    input("⏸ Documento sin registro. Presiona ENTER para cerrar el navegador…")
+                return None  # ✅ coherente con -> str | None
+
+            # ----------------------------------------------------
+            # Capturar HTML de resultados
+            # ----------------------------------------------------
             if debug:
-                print("✅ No se detectó error de CAPTCHA; continuando flujo.")
-            break
+                print("⏳ Consulta enviada satisfactoriamente. Capturando resultados…")
 
-        # ----------------------------------------------------
-        # Después de un CAPTCHA válido verificamos si el RUNT
-        # respondió "persona no encontrada / sin registro"
-        # ----------------------------------------------------
-        if check_and_handle_person_not_found(page, debug=debug):
-            # No hay resultados para ese documento
+            # Esperamos un elemento típico de resultados (puede cambiar, pero sirve como ancla)
+            try:
+                page.wait_for_selector("mat-expansion-panel", timeout=15000)
+            except PWTimeoutError:
+                # No lo tratamos como fatal: igual intentamos capturar lo que haya
+                if debug:
+                    print("⚠ No apareció 'mat-expansion-panel' a tiempo. Capturando HTML de todas formas…")
+            
+    
+            expand_all_panels_and_wait_data(page, debug=debug)
+            page.wait_for_timeout(800)
+
+            html = page.content()
+
             if debug:
-                print("⚠ La persona no tiene registro ACTIVO en RUNT (o SIN REGISTRO).")
+                print("🧪 HTML size:", len(html))
+                print("🧪 contains mat-expansion-panel:", "mat-expansion-panel" in html)
+                print("🧪 contains LICENCIAS keyword:", "Licencias de conducción" in html or "LICENCIA" in html.upper())
+                print("🧪 contains tbody rows:", "<tbody" in html and "<tr" in html)
+
+
             if hold_after and debug:
-                input("⏸ Documento sin registro. Presiona ENTER para cerrar el navegador…")
-            browser.close()
-            return False  # flujo terminó pero sin datos
+                input(
+                    "⏸ Verifica que los resultados estén cargados.\n"
+                    "   Presiona ENTER cuando quieras cerrar el navegador…"
+                )
 
-        # ----------------------------------------------------
-        # Aquí ya asumimos que la consulta se realizó bien
-        # (pendiente: parseo del panel de resultados)
-        # ----------------------------------------------------
-        if debug:
-            print("⏳ Consulta enviada satisfactoriamente. (Pendiente: parseo de resultados)")
+            return html
 
-        if hold_after:
-            if debug:
-                input("⏸ Deja que carguen los resultados.\n   Presiona ENTER cuando quieras cerrar el navegador…")
-
-        browser.close()
-        return True
+        finally:
+            # Asegura cierre incluso si ocurre error
+            try:
+                browser.close()
+            except Exception:
+                pass

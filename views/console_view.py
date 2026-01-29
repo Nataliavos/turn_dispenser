@@ -36,5 +36,10 @@ def main():
         debug=args.debug,
     )
 
-    print("✅ Consulta completada (resultado aún sin parsear):")
-    print(resultado)
+    print("✅ Consulta completada:")
+    print(f"Sin registro: {resultado.sin_registro}")
+    print(f"Nombre: {resultado.nombre}")
+    print(f"Estado conductor: {resultado.estado_licencia}")
+    print(f"Tiene multas: {resultado.tiene_multas}")
+    print("Secciones:", list((resultado.secciones or {}).keys()))
+
