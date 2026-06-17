@@ -1,0 +1,164 @@
+# services/simit_playwright.py
+# Automatización del portal público SIMIT (https://www.fcm.org.co/simit/#/home-public)
+
+import re
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
+
+SIMIT_URL = "https://www.fcm.org.co/simit/#/home-public"
+
+
+def pick_first_working_locator(page, locator_candidates, description="elemento"):
+    for css_or_getter in locator_candidates:
+        try:
+            loc = css_or_getter(page) if callable(css_or_getter) else page.locator(css_or_getter)
+            loc.wait_for(state="visible", timeout=5000)
+            return loc
+        except PWTimeoutError:
+            continue
+        except Exception:
+            continue
+    raise RuntimeError(f"No se encontró {description}. Ajusta los selectores según el HTML real.")
+
+
+def dismiss_promo_modal(page, debug: bool = True) -> None:
+    """Cierra el modal promocional superpuesto (si aparece)."""
+    try:
+        close_candidates = [
+            ".modal.show .close",
+            ".modal-header .close",
+            "button.close",
+            lambda p: p.locator(".modal.show button").filter(has_text=re.compile(r"×|x", re.I)).first,
+            lambda p: p.get_by_role("button", name=re.compile(r"cerrar|close|×", re.I)).first,
+            "[aria-label='Close']",
+            "[aria-label='Cerrar']",
+        ]
+        for cand in close_candidates:
+            try:
+                loc = cand(page) if callable(cand) else page.locator(cand)
+                if loc.count() > 0 and loc.first.is_visible():
+                    if debug:
+                        print("🪟 Modal promocional detectado. Cerrando…")
+                    loc.first.click()
+                    page.wait_for_timeout(500)
+                    if debug:
+                        print("✅ Modal promocional cerrado.")
+                    return
+            except Exception:
+                continue
+        if debug:
+            print("ℹ No se detectó modal promocional.")
+    except Exception as e:
+        if debug:
+            print(f"⚠ Error al cerrar modal: {e}")
+
+
+def fill_search_input(page, identificador: str, debug: bool = True) -> None:
+    if debug:
+        print(f"⌨️ Buscando campo de búsqueda para '{identificador}'…")
+
+    input_candidates = [
+        "input[placeholder*='identificación' i]",
+        "input[placeholder*='placa' i]",
+        lambda p: p.get_by_placeholder(re.compile(r"identificación|placa", re.I)),
+        "input.form-control",
+        lambda p: p.locator("input[type='text']").first,
+    ]
+    input_loc = pick_first_working_locator(page, input_candidates, "campo de búsqueda SIMIT")
+    input_loc.fill("")
+    input_loc.fill(identificador)
+    if debug:
+        print(f"✅ Identificador '{identificador}' ingresado.")
+
+
+def click_search_button(page, debug: bool = True) -> None:
+    if debug:
+        print("🔍 Buscando botón de consulta…")
+
+    button_candidates = [
+        "button.btn-primary",
+        ".input-group button",
+        ".input-group-append button",
+        lambda p: p.get_by_role("button").filter(has_text=re.compile(r"buscar|consultar", re.I)).first,
+        "button[type='submit']",
+        lambda p: p.locator("button.btn").first,
+    ]
+    btn = pick_first_working_locator(page, button_candidates, "botón de búsqueda SIMIT")
+    btn.click()
+    if debug:
+        print("✅ Clic en botón de búsqueda enviado.")
+
+
+def wait_for_results(page, debug: bool = True, timeout_ms: int = 30000) -> None:
+    """Espera a que carguen los resultados de la consulta."""
+    if debug:
+        print("⏳ Esperando resultados de SIMIT…")
+
+    result_selectors = [
+        "#resumenEstadoCuenta",
+        "#multaTable",
+        "#acuerdoTable",
+        "text=/No tienes comparendos ni multas/i",
+        "text=/no posee a la fecha pendientes/i",
+        "text=/Estado de cuenta/i",
+    ]
+
+    for selector in result_selectors:
+        try:
+            page.wait_for_selector(selector, timeout=timeout_ms)
+            if debug:
+                print(f"✅ Resultado detectado ({selector}).")
+            page.wait_for_timeout(1500)
+            return
+        except PWTimeoutError:
+            continue
+
+    if debug:
+        print("⚠ No se detectó selector de resultado específico; capturando HTML de todas formas.")
+    page.wait_for_timeout(2000)
+
+
+def run_simit_flow(
+    identificador: str,
+    headless: bool = False,
+    slow_mo: int = 200,
+    debug: bool = True,
+) -> str:
+    """
+    Ejecuta el flujo completo de consulta en SIMIT.
+    Retorna el HTML de la página de resultados.
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=headless, slow_mo=slow_mo)
+        context = browser.new_context()
+        page = context.new_page()
+
+        try:
+            if debug:
+                print("🌐 Abriendo portal SIMIT…")
+            page.goto(SIMIT_URL, timeout=60000)
+
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except PWTimeoutError:
+                pass
+
+            page.wait_for_timeout(1000)
+            dismiss_promo_modal(page, debug=debug)
+
+            fill_search_input(page, identificador, debug=debug)
+            click_search_button(page, debug=debug)
+            wait_for_results(page, debug=debug)
+
+            html = page.content()
+            if debug:
+                print(f"🧪 HTML SIMIT size: {len(html)}")
+                print(f"🧪 contains resumenEstadoCuenta: {'resumenEstadoCuenta' in html}")
+                print(f"🧪 contains multaTable: {'multaTable' in html}")
+
+            return html
+
+        finally:
+            try:
+                browser.close()
+            except Exception:
+                pass

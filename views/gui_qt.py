@@ -1,11 +1,10 @@
 # views/gui_qt.py
 """
-Vista gráfica (GUI) para la consulta al RUNT usando PyQt6 + QThread.
+Vista gráfica (GUI) para consulta RUNT + SIMIT usando PyQt6 + QThread.
 
-- Ventana principal: formulario + logs.
-- Worker en segundo plano corre Playwright (run_runt_flow).
-- Cuando el worker necesita resolver un CAPTCHA, emite una señal
-  que la GUI atiende mostrando un diálogo con la imagen.
+- Modo DOCUMENTO: consulta paralela RUNT + SIMIT.
+- Modo PLACA: consulta solo SIMIT.
+- CAPTCHA RUNT resuelto manualmente vía diálogo.
 """
 
 import sys
@@ -24,12 +23,16 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QDialog,
     QDialogButtonBox,
+    QButtonGroup,
+    QRadioButton,
+    QStackedWidget,
 )
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot, QEventLoop
+from PyQt6.QtGui import QPixmap, QRegularExpressionValidator
+from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot, QEventLoop, QRegularExpression
 
-from controllers.runt_controller import RuntController
-from models.runt_models import ConsultaRuntParams
+from controllers.consulta_controller import ConsultaController
+from models.consulta_models import ConsultaParams
+from utils.placa_validator import es_placa_valida, normalizar_placa, MENSAJE_PLACA_INVALIDA
 
 
 # ------------------------------------------------------------
@@ -38,13 +41,12 @@ from models.runt_models import ConsultaRuntParams
 class CaptchaDialog(QDialog):
     def __init__(self, image_bytes: bytes, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Resolver CAPTCHA")
+        self.setWindowTitle("Resolver CAPTCHA (RUNT)")
         self.setModal(True)
         self.setMinimumWidth(320)
 
         layout = QVBoxLayout(self)
 
-        # Imagen del captcha
         pixmap = QPixmap()
         pixmap.loadFromData(image_bytes)
 
@@ -53,12 +55,10 @@ class CaptchaDialog(QDialog):
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
-        # Campo de texto para ingresar el captcha
         self._edit = QLineEdit()
         self._edit.setPlaceholderText("Digite el texto del CAPTCHA…")
         layout.addWidget(self._edit)
 
-        # Botones OK / Cancelar
         botones = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -71,75 +71,56 @@ class CaptchaDialog(QDialog):
 
 
 # ------------------------------------------------------------
-# Worker que corre la consulta en segundo plano (otro hilo)
+# Worker que corre la consulta en segundo plano
 # ------------------------------------------------------------
-class RuntWorker(QObject):
-    finished = pyqtSignal(object)         # ResultadoRunt
-    error = pyqtSignal(str)               # Mensaje de error
-    log = pyqtSignal(str)                 # Mensajes de log para la GUI
-    captchaRequested = pyqtSignal(bytes)  # Pide al hilo de GUI mostrar captcha
-    _captchaResolved = pyqtSignal(str)    # GUI responde con el texto
+class ConsultaWorker(QObject):
+    finished = pyqtSignal(object)
+    error = pyqtSignal(str)
+    log = pyqtSignal(str)
+    captchaRequested = pyqtSignal(bytes)
+    _captchaResolved = pyqtSignal(str)
 
-    def __init__(self, params: ConsultaRuntParams, debug: bool = True, parent=None):
+    def __init__(self, params: ConsultaParams, debug: bool = True, parent=None):
         super().__init__(parent)
         self.params = params
         self.debug = debug
-        self.controller = RuntController()
-
+        self.controller = ConsultaController()
         self._captcha_loop: QEventLoop | None = None
         self._captcha_text: str = ""
-
-        # Conectamos la señal interna que la GUI emitirá cuando tenga el texto de captcha
         self._captchaResolved.connect(self._on_captcha_resolved)
 
     @pyqtSlot()
     def run(self):
-        """Método que se ejecuta en el hilo secundario."""
         try:
-            self.log.emit(
-                f"Iniciando consulta en worker para tipo={self.params.tipo_documento}, "
-                f"número={self.params.numero_documento}"
-            )
+            if self.params.modo == "DOCUMENTO":
+                self.log.emit(
+                    f"Iniciando consulta paralela RUNT + SIMIT "
+                    f"(tipo={self.params.tipo_documento}, id={self.params.identificador})"
+                )
+            else:
+                self.log.emit(
+                    f"Iniciando consulta SIMIT por placa: {self.params.identificador}"
+                )
 
-            resultado = self.controller.consultar_ciudadano(
+            resultado = self.controller.consultar(
                 params=self.params,
                 resolver_captcha=self._resolver_captcha_desde_worker,
                 debug=self.debug,
             )
-
             self.finished.emit(resultado)
 
         except Exception as e:
             self.error.emit(str(e))
 
-    # --------------------------------------------------------
-    # Manejo del CAPTCHA desde el worker
-    # --------------------------------------------------------
     def _resolver_captcha_desde_worker(self, image_bytes: bytes) -> str:
-        """
-        Este método lo llama el servicio Playwright (en este mismo hilo).
-        Aquí no podemos abrir diálogos de Qt directamente, así que:
-        - Emitimos una señal captchaRequested(image_bytes) para que la GUI lo muestre.
-        - Creamos un QEventLoop local que bloquea SOLO este hilo hasta que
-          la GUI nos responda con el texto vía la señal _captchaResolved(str).
-        """
-        # Pedimos a la GUI que muestre el diálogo
         self.captchaRequested.emit(image_bytes)
-
-        # Creamos un loop para esperar la respuesta
         loop = QEventLoop()
         self._captcha_loop = loop
-        loop.exec()  # se queda bloqueado este hilo hasta que _on_captcha_resolved haga loop.quit()
-
-        # Devolvemos el texto del captcha al flujo de Playwright
+        loop.exec()
         return self._captcha_text
 
     @pyqtSlot(str)
     def _on_captcha_resolved(self, text: str):
-        """
-        Slot que recibe el texto del CAPTCHA desde la GUI.
-        Cierra el loop interno para que _resolver_captcha_desde_worker continúe.
-        """
         self._captcha_text = text
         if self._captcha_loop is not None:
             self._captcha_loop.quit()
@@ -147,30 +128,48 @@ class RuntWorker(QObject):
 
 
 # ------------------------------------------------------------
-# Ventana principal de la aplicación
+# Ventana principal
 # ------------------------------------------------------------
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Consulta RUNT - Turn Dispenser")
-        self.setMinimumSize(640, 320)
+        self.setWindowTitle("Turn Dispenser — Consulta RUNT + SIMIT")
+        self.setMinimumSize(720, 480)
 
-        # Referencias al hilo/worker actuales (para no perderlos)
         self._thread: QThread | None = None
-        self._worker: RuntWorker | None = None
+        self._worker: ConsultaWorker | None = None
 
-        # ---- Layout principal ----
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
 
-        # ---- Fila de tipo de documento y número ----
-        fila_doc = QHBoxLayout()
+        # ---- Modo de consulta ----
+        fila_modo = QHBoxLayout()
+        fila_modo.addWidget(QLabel("Consultar por:"))
+
+        self.grp_modo = QButtonGroup(self)
+        self.rb_documento = QRadioButton("Documento de identidad")
+        self.rb_placa = QRadioButton("Placa del vehículo")
+        self.rb_documento.setChecked(True)
+
+        self.grp_modo.addButton(self.rb_documento, 0)
+        self.grp_modo.addButton(self.rb_placa, 1)
+
+        fila_modo.addWidget(self.rb_documento)
+        fila_modo.addWidget(self.rb_placa)
+        fila_modo.addStretch()
+        main_layout.addLayout(fila_modo)
+
+        # ---- Campos según modo ----
+        self.stack_campos = QStackedWidget()
+
+        # Página 0: documento
+        pagina_doc = QWidget()
+        layout_doc = QHBoxLayout(pagina_doc)
 
         lbl_tipo = QLabel("Tipo de documento:")
         self.cmb_tipo = QComboBox()
-        # Texto visible + código que se envía al servicio
         self.cmb_tipo.addItem("Cédula de Ciudadanía (CC)", userData="CC")
         self.cmb_tipo.addItem("Cédula de Extranjería (CE)", userData="CE")
         self.cmb_tipo.addItem("Tarjeta de Identidad (TI)", userData="TI")
@@ -178,23 +177,42 @@ class MainWindow(QMainWindow):
         self.cmb_tipo.addItem("Permiso por Protección Temporal (PPT)", userData="PPT")
 
         lbl_numero = QLabel("Número de documento:")
-        self.txt_numero = QLineEdit()
-        self.txt_numero.setPlaceholderText("Ejemplo: 1017259440")
+        self.txt_documento = QLineEdit()
+        self.txt_documento.setPlaceholderText("Ejemplo: 1017259440")
 
-        fila_doc.addWidget(lbl_tipo)
-        fila_doc.addWidget(self.cmb_tipo, stretch=1)
-        fila_doc.addSpacing(16)
-        fila_doc.addWidget(lbl_numero)
-        fila_doc.addWidget(self.txt_numero, stretch=1)
+        layout_doc.addWidget(lbl_tipo)
+        layout_doc.addWidget(self.cmb_tipo, stretch=1)
+        layout_doc.addSpacing(16)
+        layout_doc.addWidget(lbl_numero)
+        layout_doc.addWidget(self.txt_documento, stretch=1)
 
-        main_layout.addLayout(fila_doc)
+        # Página 1: placa
+        pagina_placa = QWidget()
+        layout_placa = QHBoxLayout(pagina_placa)
 
-        # ---- Botón de consulta ----
-        self.btn_consultar = QPushButton("Consultar en RUNT")
+        lbl_placa = QLabel("Placa del vehículo:")
+        self.txt_placa = QLineEdit()
+        self.txt_placa.setPlaceholderText("Ejemplo: ABC123, ABC12D, R12345")
+        self.txt_placa.setMaxLength(6)
+        self.txt_placa.setValidator(
+            QRegularExpressionValidator(QRegularExpression(r"^[A-Za-z0-9]{0,6}$"))
+        )
+
+        layout_placa.addWidget(lbl_placa)
+        layout_placa.addWidget(self.txt_placa, stretch=1)
+
+        self.stack_campos.addWidget(pagina_doc)
+        self.stack_campos.addWidget(pagina_placa)
+        main_layout.addWidget(self.stack_campos)
+
+        self.rb_documento.toggled.connect(self._on_modo_changed)
+
+        # ---- Botón consulta ----
+        self.btn_consultar = QPushButton("Consultar")
         self.btn_consultar.clicked.connect(self.on_consultar_clicked)
         main_layout.addWidget(self.btn_consultar)
 
-        # ---- Área de estado + log ----
+        # ---- Estado + log ----
         self.lbl_estado = QLabel("Listo para consultar.")
         main_layout.addWidget(self.lbl_estado)
 
@@ -202,137 +220,202 @@ class MainWindow(QMainWindow):
         self.txt_log.setReadOnly(True)
         main_layout.addWidget(self.txt_log, stretch=1)
 
-    # --------------------------------------------------------
-    # Helpers de la vista
-    # --------------------------------------------------------
+    def _on_modo_changed(self, checked: bool):
+        if self.rb_documento.isChecked():
+            self.stack_campos.setCurrentIndex(0)
+        else:
+            self.stack_campos.setCurrentIndex(1)
+
     def log(self, mensaje: str):
-        """Agrega un mensaje al área de log."""
         self.txt_log.append(f"➡ {mensaje}")
 
-    # --------------------------------------------------------
-    # Slot: clic en el botón "Consultar en RUNT"
-    # --------------------------------------------------------
     def on_consultar_clicked(self):
-        tipo_codigo = self.cmb_tipo.currentData()
-        numero = self.txt_numero.text().strip()
+        if self.rb_documento.isChecked():
+            modo = "DOCUMENTO"
+            identificador = self.txt_documento.text().strip()
+            tipo_doc = self.cmb_tipo.currentData()
+            if not identificador:
+                QMessageBox.warning(self, "Dato requerido", "Debes ingresar el número de documento.")
+                return
+        else:
+            modo = "PLACA"
+            identificador = normalizar_placa(self.txt_placa.text())
+            tipo_doc = None
+            if not identificador:
+                QMessageBox.warning(self, "Dato requerido", "Debes ingresar la placa del vehículo.")
+                return
+            if not es_placa_valida(identificador):
+                QMessageBox.warning(self, "Placa inválida", MENSAJE_PLACA_INVALIDA)
+                return
 
-        if not numero:
-            QMessageBox.warning(self, "Dato requerido", "Debes ingresar el número de documento.")
-            return
-
-        params = ConsultaRuntParams(
-            tipo_documento=tipo_codigo,
-            numero_documento=numero,
+        params = ConsultaParams(
+            modo=modo,
+            identificador=identificador,
+            tipo_documento=tipo_doc,
         )
 
-        # Preparamos estado de UI
         self.btn_consultar.setEnabled(False)
-        self.lbl_estado.setText("Consultando en el portal del RUNT…")
-        self.log(f"Iniciando consulta para tipo={tipo_codigo}, número={numero}")
+        if modo == "DOCUMENTO":
+            self.lbl_estado.setText("Consultando en RUNT y SIMIT en paralelo…")
+            self.log(f"Iniciando consulta documento: tipo={tipo_doc}, número={identificador}")
+        else:
+            self.lbl_estado.setText("Consultando en SIMIT por placa…")
+            self.log(f"Iniciando consulta placa: {identificador}")
 
-        # Creamos hilo y worker
         self._thread = QThread(self)
-        self._worker = RuntWorker(params=params, debug=True)
+        self._worker = ConsultaWorker(params=params, debug=True)
         self._worker.moveToThread(self._thread)
 
-        # Conexiones: inicio y fin del hilo
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_worker_finished)
         self._worker.error.connect(self._on_worker_error)
         self._worker.log.connect(self._on_worker_log)
         self._worker.captchaRequested.connect(self._on_captcha_requested)
 
-        # Limpieza cuando termina
         self._worker.finished.connect(self._thread.quit)
         self._worker.finished.connect(self._worker.deleteLater)
         self._thread.finished.connect(self._thread.deleteLater)
         self._worker.error.connect(self._thread.quit)
 
-        # Iniciar el hilo
         self._thread.start()
 
-    # --------------------------------------------------------
-    # Slots que reciben señales del worker
-    # --------------------------------------------------------
     @pyqtSlot(str)
     def _on_worker_log(self, msg: str):
         self.log(msg)
 
     @pyqtSlot(object)
     def _on_worker_finished(self, resultado):
-        sin_registro = getattr(resultado, "sin_registro", False)
-
-        if sin_registro:
-            msg = "La persona no tiene registro ACTIVO en RUNT (o está SIN REGISTRO)."
-            self.lbl_estado.setText(msg)
-            self.log(msg)
-            QMessageBox.information(self, "Sin registro", msg)
-            self.btn_consultar.setEnabled(True)
-            return
-
-        # ✅ Resumen
         self.lbl_estado.setText("Consulta completada.")
-        self.log("✅ Consulta completada.")
-        self.log(f"Nombre: {resultado.nombre}")
-        self.log(f"Estado conductor: {resultado.estado_licencia}")
-        self.log(f"Tiene multas: {resultado.tiene_multas}")
+        self.log("✅ Consulta finalizada.")
 
-        # ✅ Secciones (vista inicial: texto)
-        secciones = getattr(resultado, "secciones", {}) or {}
-        if not secciones:
-            self.log("ℹ No se detectaron secciones en el resultado parseado.")
-        else:
-            for titulo, contenido in secciones.items():
-                self.log(f"\n=== {titulo} ===")
+        if resultado.error_runt:
+            self.log(f"❌ Error RUNT: {resultado.error_runt}")
+        if resultado.error_simit:
+            self.log(f"❌ Error SIMIT: {resultado.error_simit}")
 
-                if contenido is None:
-                    self.log("Sin información.")
-                elif isinstance(contenido, list):
-                    for i, item in enumerate(contenido, start=1):
-                        self.log(f"--- Registro #{i} ---")
-                        if isinstance(item, dict):
-                            for k, v in item.items():
-                                self.log(f"{k}: {v}")
-                        else:
-                            self.log(str(item))
-                elif isinstance(contenido, dict):
-                    for k, v in contenido.items():
-                        self.log(f"{k}: {v}")
-                else:
-                    self.log(str(contenido))
+        if resultado.resultado_runt:
+            self._mostrar_resultado_runt(resultado.resultado_runt)
+
+        if resultado.resultado_simit:
+            self._mostrar_resultado_simit(resultado.resultado_simit)
 
         self.btn_consultar.setEnabled(True)
 
+    def _mostrar_resultado_runt(self, resultado):
+        self.log("\n══════════ RUNT ══════════")
+
+        if resultado.sin_registro:
+            self.log("Sin registro ACTIVO en RUNT.")
+            return
+
+        self.log(f"Nombre: {resultado.nombre}")
+        self.log(f"Estado conductor: {resultado.estado_licencia}")
+        self.log(f"Tiene multas (RUNT): {resultado.tiene_multas}")
+
+        secciones = resultado.secciones or {}
+        for titulo, contenido in secciones.items():
+            self.log(f"\n--- {titulo} ---")
+            self._log_contenido(contenido)
+
+    def _mostrar_resultado_simit(self, resultado):
+        self.log("\n══════════ SIMIT ══════════")
+
+        if resultado.error:
+            self.log(f"Error: {resultado.error}")
+            return
+
+        if resultado.sin_registro:
+            self.log("No se detectaron resultados en SIMIT.")
+            return
+
+        resumen = resultado.resumen
+        if resumen:
+            self.log(f"Identificador: {resumen.identificador}")
+            if resumen.cedula:
+                self.log(f"Cédula: {resumen.cedula}")
+            self.log(f"Comparendos: {resumen.comparendos}")
+            self.log(f"Multas: {resumen.multas}")
+            self.log(f"Acuerdos de pago: {resumen.acuerdos_pago}")
+            self.log(f"Total: {resumen.total}")
+
+        if resultado.comparendos_multas:
+            self.log(f"\n--- Comparendos y Multas ({len(resultado.comparendos_multas)}) ---")
+            for i, item in enumerate(resultado.comparendos_multas, start=1):
+                self.log(f"  Registro #{i}")
+                self.log(f"    Número: {item.numero}")
+                self.log(f"    Tipo: {item.tipo}")
+                self.log(f"    Fecha imposición: {item.fecha_imposicion}")
+                self.log(f"    Placa: {item.placa}")
+                self.log(f"    Secretaría: {item.secretaria}")
+                self.log(f"    Infracción: {item.infraccion}")
+                if item.infraccion_descripcion:
+                    self.log(f"    Descripción: {item.infraccion_descripcion}")
+                self.log(f"    Estado: {item.estado}")
+                self.log(f"    Valor: {item.valor}")
+                self.log(f"    Valor a pagar: {item.valor_a_pagar}")
+
+            if resultado.total_comparendos_multas:
+                t = resultado.total_comparendos_multas
+                self.log(f"  Total ({t.cantidad}): {t.valor or ''}")
+
+        hay_acuerdos = (
+            resultado.acuerdos_pago
+            or resultado.total_acuerdos_pago
+            or (resumen and resumen.acuerdos_pago > 0)
+        )
+        if hay_acuerdos:
+            cantidad = len(resultado.acuerdos_pago) or (
+                resultado.total_acuerdos_pago.cantidad if resultado.total_acuerdos_pago else
+                (resumen.acuerdos_pago if resumen else 0)
+            )
+            self.log(f"\n--- Acuerdos de pago ({cantidad}) ---")
+            for i, item in enumerate(resultado.acuerdos_pago, start=1):
+                self.log(f"  Acuerdo #{i}")
+                self.log(f"    Número: {item.numero_acuerdo}")
+                self.log(f"    Fecha: {item.fecha}")
+                self.log(f"    Secretaría: {item.secretaria}")
+                self.log(f"    Valor acuerdo: {item.valor_acuerdo}")
+                self.log(f"    Pendiente: {item.pendiente}")
+                self.log(f"    Cuota: {item.cuota}")
+                self.log(f"    Valor a pagar: {item.valor_a_pagar}")
+
+            if resultado.total_acuerdos_pago:
+                t = resultado.total_acuerdos_pago
+                self.log(f"  Total acuerdos ({t.cantidad}): {t.valor or ''}")
+
+    def _log_contenido(self, contenido):
+        if contenido is None:
+            self.log("Sin información.")
+        elif isinstance(contenido, list):
+            for i, item in enumerate(contenido, start=1):
+                self.log(f"  Registro #{i}")
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        self.log(f"    {k}: {v}")
+                else:
+                    self.log(f"    {item}")
+        elif isinstance(contenido, dict):
+            for k, v in contenido.items():
+                self.log(f"  {k}: {v}")
+        else:
+            self.log(f"  {contenido}")
 
     @pyqtSlot(str)
     def _on_worker_error(self, error_msg: str):
         self.lbl_estado.setText("Error durante la consulta.")
-        self.log(f"Error en worker: {error_msg}")
+        self.log(f"Error: {error_msg}")
         QMessageBox.critical(self, "Error en la consulta", f"Ocurrió un error:\n{error_msg}")
         self.btn_consultar.setEnabled(True)
 
     @pyqtSlot(bytes)
     def _on_captcha_requested(self, image_bytes: bytes):
-        """
-        Este slot corre en el hilo de la GUI.
-        Muestra el diálogo del CAPTCHA y responde al worker.
-        """
         dlg = CaptchaDialog(image_bytes, parent=self)
         result = dlg.exec()
-
-        if result == QDialog.DialogCode.Accepted:
-            text = dlg.captcha_text()
-        else:
-            text = ""  # usuario canceló
-
-        # Enviamos el texto de vuelta al worker
+        text = dlg.captcha_text() if result == QDialog.DialogCode.Accepted else ""
         if self._worker is not None:
             self._worker._captchaResolved.emit(text)
 
 
-# ------------------------------------------------------------
-# Punto de entrada de la GUI (para app_gui.py)
-# ------------------------------------------------------------
 def run_gui():
     app = QApplication(sys.argv)
     win = MainWindow()
