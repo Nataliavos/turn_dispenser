@@ -1,11 +1,13 @@
 # views/console_view.py
 
 import argparse
+import sys
 from pathlib import Path
 
 from config.settings import get_settings
 from models.runt_models import ConsultaRuntParams
 from controllers.runt_controller import RuntController
+from utils.documento_validator import TIPOS_SOPORTADOS, validar_documento
 from utils.logging_setup import (
     get_correlation_id,
     get_logger,
@@ -29,11 +31,18 @@ def resolver_captcha_consola(image_bytes: bytes) -> str:
     return input("👉 Texto del CAPTCHA: ").strip()
 
 
-def main():
+def main() -> None:
     setup_logging()
     settings = get_settings()
-    parser = argparse.ArgumentParser(description="Automatiza la consulta en RUNT (captcha manual).")
-    parser.add_argument("--tipo", required=True, help="Tipo de documento (CC, CE, NIT, etc.)")
+    tipos = ", ".join(sorted(TIPOS_SOPORTADOS))
+    parser = argparse.ArgumentParser(
+        description="Automatiza la consulta en RUNT (captcha manual).",
+    )
+    parser.add_argument(
+        "--tipo",
+        required=True,
+        help=f"Tipo de documento ({tipos})",
+    )
     parser.add_argument("--numero", required=True, help="Número de documento")
     parser.add_argument(
         "--no-debug",
@@ -44,19 +53,24 @@ def main():
     )
     args = parser.parse_args()
 
+    ok, tipo_norm, numero_norm, msg = validar_documento(args.tipo, args.numero)
+    if not ok:
+        print(f"Error de validación:\n{msg}", file=sys.stderr)
+        raise SystemExit(2)
+
     set_correlation_id(new_correlation_id())
     logger.info(
         "CLI RUNT tipo=%s numero=%s cid=%s",
-        args.tipo,
-        args.numero,
+        tipo_norm,
+        numero_norm,
         get_correlation_id(),
     )
 
     controller = RuntController()
 
     params = ConsultaRuntParams(
-        tipo_documento=args.tipo,
-        numero_documento=args.numero,
+        tipo_documento=tipo_norm,
+        numero_documento=numero_norm,
     )
 
     resultado = controller.consultar_ciudadano(
@@ -72,4 +86,3 @@ def main():
     print(f"Estado conductor: {resultado.estado_licencia}")
     print(f"Tiene multas: {resultado.tiene_multas}")
     print("Secciones:", list((resultado.secciones or {}).keys()))
-
