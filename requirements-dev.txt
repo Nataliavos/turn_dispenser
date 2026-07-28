@@ -1,0 +1,8 @@
+# Dependencias de desarrollo (opcionales).
+# No requeridas para ejecutar la app en producción/mostrador.
+#
+# Uso:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# Placeholder para la Fase C (fixtures/tests de parsers). Descomentar cuando se implemente C-02:
+# pytest>=8.0.0
