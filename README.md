@@ -71,7 +71,7 @@ python -m venv venv
 3) Actívalo:
 venv\Scripts\activate.bat
 
-4) Instala dependencias:
+4) Instala dependencias (solo runtime directo: PyQt6, Playwright, BeautifulSoup4):
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
