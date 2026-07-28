@@ -1,4 +1,6 @@
 from typing import Callable, Optional
+
+from config.settings import get_settings
 from models.runt_models import ConsultaRuntParams, ResultadoRunt
 from services.runt_playwright import run_runt_flow
 from services.runt_parser import parse_runt_html  # ✅ nuevo
@@ -13,18 +15,21 @@ class RuntController:
         self,
         params: ConsultaRuntParams,
         resolver_captcha: Optional[ResolverCaptcha] = None,
-        debug: bool = True,
+        debug: Optional[bool] = None,
     ) -> ResultadoRunt:
         """
         Orquesta la consulta: recibe params de la vista, llama al servicio,
         parsea resultados y devuelve un ResultadoRunt.
         """
+        settings = get_settings()
+        if debug is None:
+            debug = settings.debug
 
         html = run_runt_flow(
             tipo=params.tipo_documento,
             numero=params.numero_documento,
-            headless=False,
-            slow_mo=300,
+            headless=settings.browser_headless,
+            slow_mo=settings.runt_slow_mo_ms,
             resolver_captcha=resolver_captcha,
             debug=debug,
             hold_after=False,  # recomendado: no bloquear aquí; la GUI ya gestiona la UX

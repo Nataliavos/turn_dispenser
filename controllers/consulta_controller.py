@@ -1,6 +1,7 @@
 import threading
-from typing import Callable, Optional
+from typing import Optional
 
+from config.settings import get_settings
 from controllers.runt_controller import RuntController, ResolverCaptcha
 from controllers.simit_controller import SimitController
 from models.consulta_models import ConsultaParams, ResultadoConsulta
@@ -17,8 +18,11 @@ class ConsultaController:
         self,
         params: ConsultaParams,
         resolver_captcha: Optional[ResolverCaptcha] = None,
-        debug: bool = True,
+        debug: Optional[bool] = None,
     ) -> ResultadoConsulta:
+        if debug is None:
+            debug = get_settings().debug
+
         resultado = ResultadoConsulta(
             modo=params.modo,
             identificador=params.identificador,

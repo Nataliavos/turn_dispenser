@@ -25,8 +25,7 @@ import re
 # Manejar rutas y archivos fácilmente (estándar)
 from pathlib import Path
 
-# URL principal del módulo de consulta ciudadana del RUNT
-RUNT_URL = "https://portalpublico.runt.gov.co/#/consulta-ciudadano-documento/consulta/consulta-ciudadano-documento"
+from config.settings import get_settings
 
 
 # ------------------------------------------------------------
@@ -212,7 +211,12 @@ def dismiss_autocomplete_popup(page, debug: bool = True):
             print(f"⚠ Error intentando cerrar popup de autocompletar: {e}")
 
 
-def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = True, timeout_ms: int = 45000):
+def try_capture_and_solve_captcha(
+    page,
+    resolver_captcha=None,
+    debug: bool = True,
+    timeout_ms: int | None = None,
+):
     """
     - Busca la imagen del CAPTCHA.
     - La captura en bytes (screenshot).
@@ -221,6 +225,8 @@ def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = Tru
     - Si no se pasa resolver_captcha, por compatibilidad guarda
       captcha.png y pide input().
     """
+    if timeout_ms is None:
+        timeout_ms = get_settings().runt_captcha_timeout_ms
 
     if debug:
         print("🧩 Buscando imagen de CAPTCHA…")
@@ -511,10 +517,10 @@ def expand_all_panels_and_wait_data(page, debug: bool = False, settle_ms: int = 
 def run_runt_flow(
     tipo: str,
     numero: str,
-    headless: bool = False,
-    slow_mo: int = 300,
+    headless: bool | None = None,
+    slow_mo: int | None = None,
     resolver_captcha=None,
-    debug: bool = True,
+    debug: bool | None = None,
     hold_after: bool = False,
 ) -> str | None:
     """
@@ -531,6 +537,13 @@ def run_runt_flow(
       - str: HTML completo cuando la consulta fue exitosa
       - None: cuando la persona está SIN REGISTRO / no activa
     """
+    settings = get_settings()
+    if headless is None:
+        headless = settings.browser_headless
+    if slow_mo is None:
+        slow_mo = settings.runt_slow_mo_ms
+    if debug is None:
+        debug = settings.debug
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, slow_mo=slow_mo)
@@ -540,11 +553,17 @@ def run_runt_flow(
         try:
             if debug:
                 print("🌐 Abriendo portal del RUNT…")
-            page.goto(RUNT_URL, timeout=60000)
+            page.goto(
+                settings.runt_url,
+                timeout=settings.navigation_timeout_ms,
+            )
 
             # Angular a veces no llega a networkidle; no lo tratamos como fatal
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
+                page.wait_for_load_state(
+                    "networkidle",
+                    timeout=settings.runt_network_idle_timeout_ms,
+                )
             except PWTimeoutError:
                 pass
 
