@@ -38,6 +38,7 @@ En modo placa, el portal público RUNT no aplica; solo SIMIT.
 - Playwright (Chromium) — automatización web
 - BeautifulSoup4 — parseo HTML
 - PyQt6 — interfaz gráfica
+- python-dotenv — configuración externa (`.env`)
 - Persistencia prevista: **Supabase local con Docker** (PostgreSQL del stack Supabase). Aún no implementada.
 
 Dependencias de runtime: ver [`requirements.txt`](requirements.txt) (solo paquetes directos).
@@ -86,6 +87,23 @@ Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE
 
 ---
 
+## Configuración
+
+Parámetros de runtime (URLs, timeouts, `slow_mo`, headless, debug) se cargan desde entorno con defaults seguros:
+
+```bash
+cp .env.example .env
+# editar .env según la estación
+```
+
+- Módulo: `config/settings.py` (`get_settings()`)
+- Plantilla versionada: [`.env.example`](.env.example) (sin secretos)
+- `.env` / `.env.local` están ignorados por git
+- Por defecto `BROWSER_HEADLESS=false` (CAPTCHA RUNT manual)
+- Variables `SUPABASE_*` / `DATABASE_URL` están documentadas como placeholders para Fase D; aún no se usan en runtime
+
+---
+
 ## Estado del proyecto
 
 ### Implementado
@@ -95,10 +113,10 @@ Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE
 - GUI con modos DOCUMENTO / PLACA y orquestación `ConsultaController`
 - Arquitectura por capas: `views` → `controllers` → `services` → `models` / `utils`
 - Dependencias de runtime acotadas (A-02)
+- Configuración externa vía `.env` / defaults (`config/`) (B-01)
 
 ### Pendiente (alineado al PRD)
 
-- Configuración externa / `.env` (B-01)
 - Logging estructurado (B-02)
 - Validación robusta de documento (B-03)
 - Unificación de errores por fuente (B-04)
@@ -114,6 +132,7 @@ Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE
 ```text
 turn_dispenser/
 ├── app.py / app_gui.py
+├── config/          # settings desde entorno + defaults
 ├── controllers/     # orquestación (ConsultaController, Runt, Simit)
 ├── services/        # Playwright + parsers
 ├── models/          # dataclasses de resultados
@@ -121,6 +140,7 @@ turn_dispenser/
 ├── utils/           # validación de placa, etc.
 ├── docs/
 │   └── product-requirements-document.md   # PRD oficial
+├── .env.example
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── INSTRUCCIONES_UBUNTU.md

@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPixmap, QRegularExpressionValidator
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot, QEventLoop, QRegularExpression
 
+from config.settings import get_settings
 from controllers.consulta_controller import ConsultaController
 from models.consulta_models import ConsultaParams
 from utils.placa_validator import es_placa_valida, normalizar_placa, MENSAJE_PLACA_INVALIDA
@@ -263,7 +264,7 @@ class MainWindow(QMainWindow):
             self.log(f"Iniciando consulta placa: {identificador}")
 
         self._thread = QThread(self)
-        self._worker = ConsultaWorker(params=params, debug=True)
+        self._worker = ConsultaWorker(params=params, debug=get_settings().debug)
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)

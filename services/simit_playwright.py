@@ -4,7 +4,7 @@
 import re
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-SIMIT_URL = "https://www.fcm.org.co/simit/#/home-public"
+from config.settings import get_settings
 
 
 def pick_first_working_locator(page, locator_candidates, description="elemento"):
@@ -88,8 +88,15 @@ def click_search_button(page, debug: bool = True) -> None:
         print("✅ Clic en botón de búsqueda enviado.")
 
 
-def wait_for_results(page, debug: bool = True, timeout_ms: int = 30000) -> None:
+def wait_for_results(
+    page,
+    debug: bool = True,
+    timeout_ms: int | None = None,
+) -> None:
     """Espera a que carguen los resultados de la consulta."""
+    if timeout_ms is None:
+        timeout_ms = get_settings().simit_results_timeout_ms
+
     if debug:
         print("⏳ Esperando resultados de SIMIT…")
 
@@ -119,14 +126,22 @@ def wait_for_results(page, debug: bool = True, timeout_ms: int = 30000) -> None:
 
 def run_simit_flow(
     identificador: str,
-    headless: bool = False,
-    slow_mo: int = 200,
-    debug: bool = True,
+    headless: bool | None = None,
+    slow_mo: int | None = None,
+    debug: bool | None = None,
 ) -> str:
     """
     Ejecuta el flujo completo de consulta en SIMIT.
     Retorna el HTML de la página de resultados.
     """
+    settings = get_settings()
+    if headless is None:
+        headless = settings.browser_headless
+    if slow_mo is None:
+        slow_mo = settings.simit_slow_mo_ms
+    if debug is None:
+        debug = settings.debug
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, slow_mo=slow_mo)
         context = browser.new_context()
@@ -135,10 +150,16 @@ def run_simit_flow(
         try:
             if debug:
                 print("🌐 Abriendo portal SIMIT…")
-            page.goto(SIMIT_URL, timeout=60000)
+            page.goto(
+                settings.simit_url,
+                timeout=settings.navigation_timeout_ms,
+            )
 
             try:
-                page.wait_for_load_state("networkidle", timeout=15000)
+                page.wait_for_load_state(
+                    "networkidle",
+                    timeout=settings.simit_network_idle_timeout_ms,
+                )
             except PWTimeoutError:
                 pass
 
