@@ -33,6 +33,7 @@ from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot, QEventLoop,
 from config.settings import get_settings
 from controllers.consulta_controller import ConsultaController
 from models.consulta_models import ConsultaParams
+from utils.documento_validator import validar_documento
 from utils.placa_validator import es_placa_valida, normalizar_placa, MENSAJE_PLACA_INVALIDA
 
 
@@ -176,6 +177,8 @@ class MainWindow(QMainWindow):
         self.cmb_tipo.addItem("Tarjeta de Identidad (TI)", userData="TI")
         self.cmb_tipo.addItem("Registro Civil (RC)", userData="RC")
         self.cmb_tipo.addItem("Permiso por Protección Temporal (PPT)", userData="PPT")
+        self.cmb_tipo.addItem("Pasaporte (PA)", userData="PA")
+        self.cmb_tipo.addItem("Carnet Diplomático (CD)", userData="CD")
 
         lbl_numero = QLabel("Número de documento:")
         self.txt_documento = QLineEdit()
@@ -233,10 +236,11 @@ class MainWindow(QMainWindow):
     def on_consultar_clicked(self):
         if self.rb_documento.isChecked():
             modo = "DOCUMENTO"
-            identificador = self.txt_documento.text().strip()
-            tipo_doc = self.cmb_tipo.currentData()
-            if not identificador:
-                QMessageBox.warning(self, "Dato requerido", "Debes ingresar el número de documento.")
+            tipo_raw = self.cmb_tipo.currentData() or ""
+            numero_raw = self.txt_documento.text()
+            ok, tipo_doc, identificador, msg = validar_documento(tipo_raw, numero_raw)
+            if not ok:
+                QMessageBox.warning(self, "Documento inválido", msg)
                 return
         else:
             modo = "PLACA"

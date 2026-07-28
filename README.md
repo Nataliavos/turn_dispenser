@@ -83,6 +83,10 @@ python app.py --tipo CC --numero 1017259440
 
 **CAPTCHA:** este proyecto no evade mecanismos de seguridad. El CAPTCHA de RUNT se resuelve **manualmente**.
 
+Antes de lanzar automatización, la app valida formato básico:
+- **Documento:** tipo soportado (`CC`, `CE`, `TI`, `RC`, `PPT`, `CD`, `PA`) + número con longitud/caracteres razonables (`utils/documento_validator.py`).
+- **Placa:** formatos colombianos conocidos (`utils/placa_validator.py`).
+
 Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md).
 
 ---
@@ -117,10 +121,10 @@ cp .env.example .env
 - Dependencias de runtime acotadas (A-02)
 - Configuración externa vía `.env` / defaults (`config/`) (B-01)
 - Logging estructurado con niveles y correlation id (B-02)
+- Validación de entradas de documento (tipo + número) en GUI/CLI (B-03)
 
 ### Pendiente (alineado al PRD)
 
-- Validación robusta de documento (B-03)
 - Unificación de errores por fuente (B-04)
 - Normalización de modelos + fixtures/tests de parsers (Fase C)
 - Persistencia con **Supabase + Docker** (Fase D)
