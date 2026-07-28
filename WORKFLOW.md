@@ -1,50 +1,71 @@
+# Workflow diario — Turn Dispenser
 
-
-🧭 Guía práctica para trabajar día a día usando **CMD**.
+Guía práctica para desarrollar y probar sin contradecir el [PRD](docs/product-requirements-document.md).
 
 ---
 
-## 🚀 INICIO DE JORNADA (CMD)
+## Inicio de jornada
 
-1) Abrir el proyecto
-```cmd
-cd /d D:\TESLA\turn_dispenser
+```bash
+cd /ruta/al/turn_dispenser
+git checkout main
+git pull origin main
 
-2) Abrir el proyecto
-venv\Scripts\activate.bat
+# Activar venv (Linux)
+source .venv/bin/activate
+# Windows CMD: venv\Scripts\activate.bat
 
-3) Instalar / sincronizar dependencias
 pip install -r requirements.txt
+python -m playwright install chromium   # si hace falta
+```
 
-4) Verificar Playwright (Chromium)
-python -m playwright install chromium
+Ubuntu: ver también [`INSTRUCCIONES_UBUNTU.md`](INSTRUCCIONES_UBUNTU.md).
 
-5) Ejecutar
-python app_gui.py
+---
 
+## Durante el desarrollo
 
-🧪 DURANTE EL DESARROLLO
+1. Crear rama desde `main` (Conventional Commits), por ejemplo:
+   - `docs/A-03-...`, `feat/B-01-...`, `chore/...`
+2. Implementar **solo** el alcance del ticket.
+3. Probar:
+   - GUI: `python app_gui.py` (DOCUMENTO = RUNT+SIMIT; PLACA = SIMIT)
+   - Consola: `python app.py --tipo CC --numero <doc>` (hoy: solo RUNT)
+4. Respetar capas:
+   - `views/` — UI / CLI
+   - `controllers/` — orquestación
+   - `services/` — Playwright y parsers
+   - `models/` — dataclasses
+   - `utils/` — helpers (p. ej. placa)
 
-- Probar primero en GUI (python app_gui.py)
-- Mantener Playwright en services/runt_playwright.py (solo automatización)
-- Mantener parseo en services/runt_parser.py
-- Mantener lógica de orquestación en controllers/runt_controller.py
+**No** introducir reglas de elegibilidad (“puede / no puede tramitar”).
 
-✅ FIN DE JORNADA (CMD)
+---
 
-1. Revisar cambios
+## Dependencias
+
+- Runtime: editar solo [`requirements.txt`](requirements.txt) (paquetes **directos**).
+- Dev (futuro): [`requirements-dev.txt`](requirements-dev.txt).
+- **No** uses `pip freeze > requirements.txt` (vuelve a hinchar transitivas). Si agregas un paquete usado en código, añádelo a mano en `requirements.txt`.
+
+---
+
+## Fin de jornada / PR
+
+```bash
 git status
+git add <archivos del ticket>
+git commit -m "tipo(alcance): resumen en inglés o español claro"
+git push -u origin HEAD
+gh pr create   # o abrir PR desde GitHub
+```
 
-2. Guardar cambios
-git add .
-git commit -m "Describe lo que hiciste"
-git push
+Un ticket ≈ una rama ≈ un PR hacia `main`.
 
-3. Si cambiaste dependencias
-pip freeze > requirements.txt
-git add requirements.txt
-git commit -m "Actualiza dependencias"
-git push
+---
 
-4. Cerrar entorno virtual
-deactivate
+## Referencias
+
+- Producto: [`docs/product-requirements-document.md`](docs/product-requirements-document.md)
+- Plan antiguo (archivado): [`PLAN_DESARROLLO.md`](PLAN_DESARROLLO.md)
+- Pruebas manuales históricas: [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md)

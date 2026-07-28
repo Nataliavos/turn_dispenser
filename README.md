@@ -1,100 +1,145 @@
-# 🌀 Turn Dispenser – Consulta Ciudadana RUNT
+# Turn Dispenser
 
-Aplicación en **Python** (Playwright) con:
-- 🖥️ **Interfaz gráfica (PyQt6)** para consultar en el Portal Público del **RUNT**.
-- 💻 **Modo consola (CMD)** para pruebas rápidas.
+Aplicación de escritorio en **Python** que automatiza consultas a plataformas oficiales de tránsito en Colombia (**RUNT** y **SIMIT**) para reducir el tiempo operativo de funcionarios en CRC / centros de trámites.
 
-El usuario ingresa tipo y número de documento y resuelve el **CAPTCHA manualmente** (requisito del portal).
+**Pregunta que responde hoy:** *¿Qué reportan RUNT y SIMIT?*  
+**No decide** si un ciudadano puede realizar un trámite (reglas de elegibilidad fuera de alcance).
 
----
-
-## ✅ Características
-
-- Automatización con **Playwright**
-- CAPTCHA manual (CLI o GUI)
-- GUI multihilo (QThread) para no congelar la app
-- Arquitectura por capas: `controllers / services / models / views`
-- Base para parseo (`runt_parser.py`) y futuro guardado en DB
+**Fuente de verdad del producto:** [`docs/product-requirements-document.md`](docs/product-requirements-document.md)
 
 ---
 
-## 📁 Estructura del proyecto
+## Entry points
 
-turn_dispenser/
-│
-├── app.py # Entrada modo consola (CMD)
-├── app_gui.py # Entrada modo GUI (PyQt6)
-│
-├── controllers/
-│ └── runt_controller.py
-│
-├── models/
-│ └── runt_models.py
-│
-├── services/
-│ ├── runt_playwright.py
-│ └── runt_parser.py
-│
-├── views/
-│ ├── console_view.py
-│ └── gui_qt.py
-│
-├── requirements.txt
-├── README.md
-├── INSTRUCCIONES_CMD.txt
-└── WORKFLOW.md
+| Comando | Uso |
+|---------|-----|
+| `python app_gui.py` | GUI PyQt6 (recomendado en mostrador) |
+| `python app.py --tipo CC --numero <documento>` | Consola (consulta RUNT por documento) |
 
-Los únicos entry points soportados son `app.py` (consola) y `app_gui.py` (GUI).
-La automatización RUNT/SIMIT vive en `services/` y se orquesta desde `controllers/`.
+Los únicos entry points soportados son `app.py` y `app_gui.py`.  
+La automatización vive en `services/` y se orquesta desde `controllers/`.
 
 ---
 
-## ⚙️ Requisitos
+## Modos de consulta
 
-- Windows
-- Python 3.10+ instalado y agregado al PATH
-- Conexión a internet
+| Modo | GUI | Consola (actual) |
+|------|-----|------------------|
+| **DOCUMENTO** (tipo + número) | RUNT + SIMIT en paralelo vía `ConsultaController` (CAPTCHA RUNT manual) | Solo RUNT vía `RuntController` |
+| **PLACA** | Solo SIMIT (validación de formato de placa) | No disponible aún en CLI |
+
+En modo placa, el portal público RUNT no aplica; solo SIMIT.
 
 ---
 
-## 🔧 Instalación (CMD)
+## Stack
 
-1) Abre **CMD** en la carpeta del proyecto (ejemplo):
-```txt
-D:\TESLA\turn_dispenser>
+- Python 3.10+
+- Playwright (Chromium) — automatización web
+- BeautifulSoup4 — parseo HTML
+- PyQt6 — interfaz gráfica
+- Persistencia prevista: **Supabase local con Docker** (PostgreSQL del stack Supabase). Aún no implementada.
 
-```cmd
+Dependencias de runtime: ver [`requirements.txt`](requirements.txt) (solo paquetes directos).
 
-2) Crea el entorno virtual:
-python -m venv venv
+---
 
-3) Actívalo:
-venv\Scripts\activate.bat
+## Instalación rápida
 
-4) Instala dependencias (solo runtime directo: PyQt6, Playwright, BeautifulSoup4):
+### Linux / Ubuntu
+
+Sigue la guía detallada: [`INSTRUCCIONES_UBUNTU.md`](INSTRUCCIONES_UBUNTU.md).
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-
-5) Instala Chromium de Playwright:
 python -m playwright install chromium
+```
 
+### Windows (CMD)
 
-▶️ Ejecución (CMD)
+```cmd
+python -m venv venv
+venv\Scripts\activate.bat
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python -m playwright install chromium
+```
 
-GUI entorno gráfico (recomendado):
+---
+
+## Ejecución
+
+```bash
+# GUI
 python app_gui.py
 
-Consola:
+# Consola — RUNT por documento
 python app.py --tipo CC --numero 1017259440
+```
 
+**CAPTCHA:** este proyecto no evade mecanismos de seguridad. El CAPTCHA de RUNT se resuelve **manualmente**.
 
-⚠️ Nota importante
-Este proyecto no evade mecanismos de seguridad.
-El CAPTCHA se resuelve manualmente por el usuario.
+Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md).
 
-🧭 Estado
-✅ Automatización + CAPTCHA OK
-✅ GUI funcional
-⏳ Parseo completo de resultados (en progreso)
-⏳ Persistencia en base de datos (pendiente)
-⏳ Barrido controlado (pendiente)
+---
+
+## Estado del proyecto
+
+### Implementado
+
+- Automatización Playwright de RUNT (CAPTCHA manual) y SIMIT
+- Parseo estructurado (`runt_parser`, `simit_parser`) con `raw_html`
+- GUI con modos DOCUMENTO / PLACA y orquestación `ConsultaController`
+- Arquitectura por capas: `views` → `controllers` → `services` → `models` / `utils`
+- Dependencias de runtime acotadas (A-02)
+
+### Pendiente (alineado al PRD)
+
+- Configuración externa / `.env` (B-01)
+- Logging estructurado (B-02)
+- Validación robusta de documento (B-03)
+- Unificación de errores por fuente (B-04)
+- Normalización de modelos + fixtures/tests de parsers (Fase C)
+- Persistencia con **Supabase + Docker** (Fase D)
+- Piloto operativo / runbook (Fase E)
+- Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
+
+---
+
+## Estructura (resumen)
+
+```text
+turn_dispenser/
+├── app.py / app_gui.py
+├── controllers/     # orquestación (ConsultaController, Runt, Simit)
+├── services/        # Playwright + parsers
+├── models/          # dataclasses de resultados
+├── views/           # GUI y consola
+├── utils/           # validación de placa, etc.
+├── docs/
+│   └── product-requirements-document.md   # PRD oficial
+├── requirements.txt
+├── requirements-dev.txt
+├── INSTRUCCIONES_UBUNTU.md
+├── WORKFLOW.md
+└── PLAN_DESARROLLO.md   # archivado; ver nota interna
+```
+
+---
+
+## Contribución (Git / GitHub)
+
+Flujo recomendado:
+
+1. Actualizar `main`
+2. Crear una rama por ticket con Conventional Commits, p. ej.:
+   - `feat/...`, `fix/...`, `chore/...`, `docs/...`, `refactor/...`, `test/...`
+3. Un ticket ≈ una rama ≈ un PR hacia `main`
+4. Título de commit/PR al estilo: `docs(A-03): alinear documentación al PRD y al código`
+
+No versionar documentos de trabajo personal (tickets internos, auditoría, backlog local). El PRD en `docs/` sí es documentación oficial del producto.
+
+Guía día a día: [`WORKFLOW.md`](WORKFLOW.md).
