@@ -4,6 +4,9 @@ from config.settings import get_settings
 from models.simit_models import ConsultaSimitParams, ResultadoSimit
 from services.simit_playwright import run_simit_flow
 from services.simit_parser import parse_simit_html
+from utils.logging_setup import ensure_correlation_id, get_logger
+
+logger = get_logger(__name__)
 
 
 class SimitController:
@@ -15,6 +18,14 @@ class SimitController:
         settings = get_settings()
         if debug is None:
             debug = settings.debug
+
+        cid = ensure_correlation_id()
+        logger.info(
+            "Iniciando consulta SIMIT modo=%s identificador=%s cid=%s",
+            params.modo,
+            params.identificador,
+            cid,
+        )
 
         try:
             html = run_simit_flow(
@@ -29,7 +40,15 @@ class SimitController:
                 identificador=params.identificador,
                 modo=params.modo,
             )
+            if resultado.error:
+                logger.error("Parseo/resultado SIMIT con error: %s", resultado.error)
+            else:
+                logger.info(
+                    "Consulta SIMIT OK sin_registro=%s",
+                    resultado.sin_registro,
+                )
             return resultado
 
         except Exception as e:
+            logger.error("Error en consulta SIMIT: %s", e, exc_info=True)
             return ResultadoSimit(error=str(e))

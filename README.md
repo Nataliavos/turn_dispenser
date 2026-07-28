@@ -89,7 +89,7 @@ Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE
 
 ## Configuración
 
-Parámetros de runtime (URLs, timeouts, `slow_mo`, headless, debug) se cargan desde entorno con defaults seguros:
+Parámetros de runtime (URLs, timeouts, `slow_mo`, headless, debug, logging) se cargan desde entorno con defaults seguros:
 
 ```bash
 cp .env.example .env
@@ -97,9 +97,11 @@ cp .env.example .env
 ```
 
 - Módulo: `config/settings.py` (`get_settings()`)
+- Logging: `utils/logging_setup.py` (`setup_logging()`, correlation id por consulta)
 - Plantilla versionada: [`.env.example`](.env.example) (sin secretos)
 - `.env` / `.env.local` están ignorados por git
 - Por defecto `BROWSER_HEADLESS=false` (CAPTCHA RUNT manual)
+- `LOG_LEVEL` / `LOG_FILE` opcionales (sin archivo por defecto; solo stderr)
 - Variables `SUPABASE_*` / `DATABASE_URL` están documentadas como placeholders para Fase D; aún no se usan en runtime
 
 ---
@@ -114,10 +116,10 @@ cp .env.example .env
 - Arquitectura por capas: `views` → `controllers` → `services` → `models` / `utils`
 - Dependencias de runtime acotadas (A-02)
 - Configuración externa vía `.env` / defaults (`config/`) (B-01)
+- Logging estructurado con niveles y correlation id (B-02)
 
 ### Pendiente (alineado al PRD)
 
-- Logging estructurado (B-02)
 - Validación robusta de documento (B-03)
 - Unificación de errores por fuente (B-04)
 - Normalización de modelos + fixtures/tests de parsers (Fase C)

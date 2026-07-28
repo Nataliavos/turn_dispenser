@@ -65,6 +65,9 @@ class Settings:
     app_env: str
     debug: bool
 
+    log_level: str
+    log_file: Optional[str]
+
     runt_url: str
     simit_url: str
 
@@ -85,13 +88,24 @@ class Settings:
     supabase_service_role_key: Optional[str]
 
 
+def _default_log_level(debug: bool) -> str:
+    """Si LOG_LEVEL no está definido: DEBUG con debug=true, INFO en caso contrario."""
+    explicit = os.getenv("LOG_LEVEL")
+    if explicit is not None and explicit.strip() != "":
+        return explicit.strip().upper()
+    return "DEBUG" if debug else "INFO"
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Devuelve la configuración cargada (cacheada por proceso)."""
     _load_env_files()
+    debug = _env_bool("DEBUG", True)
     return Settings(
         app_env=_env_str("APP_ENV", "local"),
-        debug=_env_bool("DEBUG", True),
+        debug=debug,
+        log_level=_default_log_level(debug),
+        log_file=_env_optional_str("LOG_FILE"),
         runt_url=_env_str("RUNT_URL", _DEFAULT_RUNT_URL),
         simit_url=_env_str("SIMIT_URL", _DEFAULT_SIMIT_URL),
         browser_headless=_env_bool("BROWSER_HEADLESS", False),

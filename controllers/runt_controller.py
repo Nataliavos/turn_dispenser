@@ -3,9 +3,13 @@ from typing import Callable, Optional
 from config.settings import get_settings
 from models.runt_models import ConsultaRuntParams, ResultadoRunt
 from services.runt_playwright import run_runt_flow
-from services.runt_parser import parse_runt_html  # ✅ nuevo
+from services.runt_parser import parse_runt_html
+from utils.logging_setup import ensure_correlation_id, get_logger
 
 ResolverCaptcha = Callable[[bytes], str]
+
+logger = get_logger(__name__)
+
 
 class RuntController:
     def __init__(self):
@@ -25,6 +29,14 @@ class RuntController:
         if debug is None:
             debug = settings.debug
 
+        cid = ensure_correlation_id()
+        logger.info(
+            "Iniciando consulta RUNT tipo=%s documento=%s cid=%s",
+            params.tipo_documento,
+            params.numero_documento,
+            cid,
+        )
+
         html = run_runt_flow(
             tipo=params.tipo_documento,
             numero=params.numero_documento,
@@ -35,18 +47,15 @@ class RuntController:
             hold_after=False,  # recomendado: no bloquear aquí; la GUI ya gestiona la UX
         )
 
-        # ✅ Caso SIN REGISTRO
         if html is None:
-            if debug:
-                print("⚠ Resultado: documento sin registro o persona no activa en RUNT.")
+            logger.info(
+                "Resultado RUNT: documento sin registro o persona no activa."
+            )
             return ResultadoRunt(raw_html=None, sin_registro=True)
 
-        # ✅ Parseo
         parsed = parse_runt_html(html)
         secciones = parsed.get("secciones", {}) or {}
 
-        # ✅ Detección simple de multas (si existe sección y trae algo)
-        # Nota: el título exacto puede variar; intentamos varias claves tolerantes
         posibles_multas_keys = [
             "MULTAS E INFRACCIONES",
             "MULTAS",
@@ -62,7 +71,6 @@ class RuntController:
         if multas_data is None:
             tiene_multas = False
         else:
-            # si es lista con al menos un item o dict con algún contenido, asumimos que sí hay info
             if isinstance(multas_data, list):
                 tiene_multas = len(multas_data) > 0
             elif isinstance(multas_data, dict):
@@ -70,6 +78,11 @@ class RuntController:
             else:
                 tiene_multas = bool(str(multas_data).strip())
 
+        logger.info(
+            "Consulta RUNT OK nombre=%s secciones=%s",
+            parsed.get("nombre_completo"),
+            list(secciones.keys()),
+        )
         return ResultadoRunt(
             nombre=parsed.get("nombre_completo"),
             estado_licencia=parsed.get("estado_conductor"),

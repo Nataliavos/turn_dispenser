@@ -5,6 +5,9 @@ import re
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
 from config.settings import get_settings
+from utils.logging_setup import get_logger
+
+logger = get_logger(__name__)
 
 
 def pick_first_working_locator(page, locator_candidates, description="elemento"):
@@ -37,24 +40,24 @@ def dismiss_promo_modal(page, debug: bool = True) -> None:
                 loc = cand(page) if callable(cand) else page.locator(cand)
                 if loc.count() > 0 and loc.first.is_visible():
                     if debug:
-                        print("🪟 Modal promocional detectado. Cerrando…")
+                        logger.debug("Modal promocional detectado. Cerrando…")
                     loc.first.click()
                     page.wait_for_timeout(500)
                     if debug:
-                        print("✅ Modal promocional cerrado.")
+                        logger.debug("Modal promocional cerrado.")
                     return
             except Exception:
                 continue
         if debug:
-            print("ℹ No se detectó modal promocional.")
+            logger.debug("No se detectó modal promocional.")
     except Exception as e:
         if debug:
-            print(f"⚠ Error al cerrar modal: {e}")
+            logger.warning("Error al cerrar modal promocional: %s", e)
 
 
 def fill_search_input(page, identificador: str, debug: bool = True) -> None:
     if debug:
-        print(f"⌨️ Buscando campo de búsqueda para '{identificador}'…")
+        logger.debug("Buscando campo de búsqueda para '%s'…", identificador)
 
     input_candidates = [
         "input[placeholder*='identificación' i]",
@@ -67,12 +70,12 @@ def fill_search_input(page, identificador: str, debug: bool = True) -> None:
     input_loc.fill("")
     input_loc.fill(identificador)
     if debug:
-        print(f"✅ Identificador '{identificador}' ingresado.")
+        logger.debug("Identificador '%s' ingresado.", identificador)
 
 
 def click_search_button(page, debug: bool = True) -> None:
     if debug:
-        print("🔍 Buscando botón de consulta…")
+        logger.debug("Buscando botón de consulta SIMIT…")
 
     button_candidates = [
         "button.btn-primary",
@@ -85,7 +88,7 @@ def click_search_button(page, debug: bool = True) -> None:
     btn = pick_first_working_locator(page, button_candidates, "botón de búsqueda SIMIT")
     btn.click()
     if debug:
-        print("✅ Clic en botón de búsqueda enviado.")
+        logger.debug("Clic en botón de búsqueda SIMIT enviado.")
 
 
 def wait_for_results(
@@ -98,7 +101,7 @@ def wait_for_results(
         timeout_ms = get_settings().simit_results_timeout_ms
 
     if debug:
-        print("⏳ Esperando resultados de SIMIT…")
+        logger.debug("Esperando resultados de SIMIT…")
 
     result_selectors = [
         "#resumenEstadoCuenta",
@@ -113,14 +116,17 @@ def wait_for_results(
         try:
             page.wait_for_selector(selector, timeout=timeout_ms)
             if debug:
-                print(f"✅ Resultado detectado ({selector}).")
+                logger.debug("Resultado SIMIT detectado (%s).", selector)
             page.wait_for_timeout(1500)
             return
         except PWTimeoutError:
             continue
 
     if debug:
-        print("⚠ No se detectó selector de resultado específico; capturando HTML de todas formas.")
+        logger.warning(
+            "No se detectó selector de resultado SIMIT específico; "
+            "capturando HTML de todas formas."
+        )
     page.wait_for_timeout(2000)
 
 
@@ -148,8 +154,7 @@ def run_simit_flow(
         page = context.new_page()
 
         try:
-            if debug:
-                print("🌐 Abriendo portal SIMIT…")
+            logger.info("Abriendo portal SIMIT…")
             page.goto(
                 settings.simit_url,
                 timeout=settings.navigation_timeout_ms,
@@ -172,10 +177,14 @@ def run_simit_flow(
 
             html = page.content()
             if debug:
-                print(f"🧪 HTML SIMIT size: {len(html)}")
-                print(f"🧪 contains resumenEstadoCuenta: {'resumenEstadoCuenta' in html}")
-                print(f"🧪 contains multaTable: {'multaTable' in html}")
+                logger.debug("HTML SIMIT size: %s", len(html))
+                logger.debug(
+                    "contains resumenEstadoCuenta: %s",
+                    "resumenEstadoCuenta" in html,
+                )
+                logger.debug("contains multaTable: %s", "multaTable" in html)
 
+            logger.info("Consulta SIMIT completada (html_bytes=%s).", len(html))
             return html
 
         finally:

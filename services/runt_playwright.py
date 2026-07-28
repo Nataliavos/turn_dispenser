@@ -27,6 +27,10 @@ from pathlib import Path
 
 from config.settings import get_settings
 
+from utils.logging_setup import get_logger
+
+logger = get_logger(__name__)
+
 
 # ------------------------------------------------------------
 # FUNCIÓN AUXILIAR 1: buscar el primer selector que funcione
@@ -94,7 +98,7 @@ def select_tipo_documento(page, codigo: str, debug: bool = True):
 
     # 2) Abre el combo
     if debug:
-        print(f"🖱️ Abriendo el combo de tipo de documento (código={codigo})…")
+        logger.debug(f"🖱️ Abriendo el combo de tipo de documento (código={codigo})…")
     select_loc.click()
 
     # 3) Espera el overlay
@@ -102,12 +106,12 @@ def select_tipo_documento(page, codigo: str, debug: bool = True):
         page.wait_for_selector(".cdk-overlay-container .mat-select-panel", timeout=8000)
     except Exception:
         if debug:
-            print("⚠ No apareció el panel del combo. Reintentando clic…")
+            logger.warning("⚠ No apareció el panel del combo. Reintentando clic…")
         select_loc.click()
         page.wait_for_selector(".cdk-overlay-container .mat-select-panel", timeout=8000)
 
     if debug:
-        print(f"📜 Buscando opción para código '{codigo}' → '{visible}'")
+        logger.debug(f"📜 Buscando opción para código '{codigo}' → '{visible}'")
 
     # 4) Opciones dentro del overlay
     opciones_texto = page.locator(".cdk-overlay-container .mat-option-text")
@@ -116,13 +120,13 @@ def select_tipo_documento(page, codigo: str, debug: bool = True):
     try:
         opciones_texto.filter(has_text=patron).first.click(timeout=8000)
         if debug:
-            print(f"✅ Opción '{visible}' seleccionada para código '{codigo}'.")
+            logger.debug(f"✅ Opción '{visible}' seleccionada para código '{codigo}'.")
     except Exception as e:
         # Fallback por rol
         try:
             page.get_by_role("option", name=patron).first.click(timeout=8000)
             if debug:
-                print(f"✅ Opción '{visible}' seleccionada (fallback role=option).")
+                logger.debug(f"✅ Opción '{visible}' seleccionada (fallback role=option).")
         except Exception as e2:
             raise RuntimeError(
                 f"No se pudo seleccionar el tipo de documento '{codigo}' ('{visible}'). "
@@ -137,7 +141,7 @@ def fill_numero_documento(page, numero: str, debug: bool = True):
     Ajusta los selectores si la página cambia.
     """
     if debug:
-        print("⌨️ Buscando campo de número de documento…")
+        logger.debug("⌨️ Buscando campo de número de documento…")
 
     input_candidates = [
         # 1) Lo que vemos en el HTML real
@@ -156,7 +160,7 @@ def fill_numero_documento(page, numero: str, debug: bool = True):
     input_loc = pick_first_working_locator(page, input_candidates, "campo 'Número de documento'")
     input_loc.fill(numero)
     if debug:
-        print(f"✅ Número de documento '{numero}' llenado.")
+        logger.debug(f"✅ Número de documento '{numero}' llenado.")
 
 
 def dismiss_autocomplete_popup(page, debug: bool = True):
@@ -173,7 +177,7 @@ def dismiss_autocomplete_popup(page, debug: bool = True):
         popup.wait_for(state="visible", timeout=3000)
 
         if debug:
-            print("🩷 Popup de 'Autocompletar' detectado. Intentando cerrarlo…")
+            logger.debug("🩷 Popup de 'Autocompletar' detectado. Intentando cerrarlo…")
 
         # Intentamos primero el botón de cerrar (la X)
         close_candidates = [
@@ -196,19 +200,19 @@ def dismiss_autocomplete_popup(page, debug: bool = True):
         if btn_close is not None:
             btn_close.click()
             if debug:
-                print("✅ Popup de 'Autocompletar' cerrado.")
+                logger.debug("✅ Popup de 'Autocompletar' cerrado.")
             page.wait_for_timeout(300)  # pequeño respiro
         else:
             if debug:
-                print("ℹ No se encontró botón claro para cerrar el popup, se continúa.")
+                logger.debug("ℹ No se encontró botón claro para cerrar el popup, se continúa.")
 
     except PWTimeoutError:
         # No apareció el popup; todo bien
         if debug:
-            print("ℹ No se detectó popup de 'Autocompletar'.")
+            logger.debug("ℹ No se detectó popup de 'Autocompletar'.")
     except Exception as e:
         if debug:
-            print(f"⚠ Error intentando cerrar popup de autocompletar: {e}")
+            logger.warning(f"⚠ Error intentando cerrar popup de autocompletar: {e}")
 
 
 def try_capture_and_solve_captcha(
@@ -229,7 +233,7 @@ def try_capture_and_solve_captcha(
         timeout_ms = get_settings().runt_captcha_timeout_ms
 
     if debug:
-        print("🧩 Buscando imagen de CAPTCHA…")
+        logger.debug("🧩 Buscando imagen de CAPTCHA…")
 
     # Selectores ajustados a la estructura que vimos
     captcha_img_candidates = [
@@ -260,11 +264,11 @@ def try_capture_and_solve_captcha(
         tmp_path = Path("captcha.png").absolute()
         tmp_path.write_bytes(image_bytes)
         if debug:
-            print(f"🖼 CAPTCHA guardado en: {tmp_path}")
+            logger.debug(f"🖼 CAPTCHA guardado en: {tmp_path}")
         captcha_text = input("👉 Texto del CAPTCHA: ").strip()
 
     if debug:
-        print(f"🔐 CAPTCHA ingresado: '{captcha_text}'")
+        logger.debug(f"🔐 CAPTCHA ingresado: '{captcha_text}'")
 
     # -------- Escribir el captcha en el input correspondiente --------
     captcha_input_candidates = [
@@ -301,7 +305,7 @@ def check_and_handle_captcha_error(page, debug: bool = True) -> bool:
         popup_text = ""
 
     if debug:
-        print(f"🪧 Texto del popup SweetAlert2: {popup_text!r}")
+        logger.debug(f"🪧 Texto del popup SweetAlert2: {popup_text!r}")
 
     # ¿Es el popup específico del captcha?
     if not re.search(r"El\s+captcha\s+no\s+es\s+v[aá]lido", popup_text, re.I):
@@ -309,23 +313,23 @@ def check_and_handle_captcha_error(page, debug: bool = True) -> bool:
         return False
 
     if debug:
-        print("❌ CAPTCHA incorrecto: popup 'El captcha no es valido.' detectado.")
+        logger.warning("❌ CAPTCHA incorrecto: popup 'El captcha no es valido.' detectado.")
 
     # Intentar hacer clic en el botón Aceptar
     try:
         # Según tu HTML: <button class="swal2-confirm swal2-styled">Aceptar</button>
         popup.locator("button.swal2-confirm").click()
         if debug:
-            print("🧹 Botón 'Aceptar' (swal2-confirm) clickeado.")
+            logger.debug("🧹 Botón 'Aceptar' (swal2-confirm) clickeado.")
     except Exception:
         # Fallback: buscar cualquier botón con texto Aceptar
         try:
             page.get_by_role("button", name=re.compile(r"Aceptar", re.I)).first.click()
             if debug:
-                print("🧹 Botón 'Aceptar' clickeado (fallback get_by_role).")
+                logger.debug("🧹 Botón 'Aceptar' clickeado (fallback get_by_role).")
         except Exception:
             if debug:
-                print("⚠ No se pudo hacer clic automáticamente en 'Aceptar'.")
+                logger.warning("⚠ No se pudo hacer clic automáticamente en 'Aceptar'.")
 
     # Dejar que se cierre el popup y se regenere el captcha
     page.wait_for_timeout(800)
@@ -358,7 +362,7 @@ def check_and_handle_person_not_found(page, debug: bool = True) -> bool:
         popup_text = ""
 
     if debug:
-        print(f"🪧 Texto del popup SweetAlert2: {popup_text!r}")
+        logger.debug(f"🪧 Texto del popup SweetAlert2: {popup_text!r}")
 
     # ¿Es el popup específico de persona no encontrada?
     import re
@@ -372,21 +376,21 @@ def check_and_handle_person_not_found(page, debug: bool = True) -> bool:
         return False
 
     if debug:
-        print("ℹ️ RUNT indica: 'No se ha encontrado la persona en estado ACTIVA o SIN REGISTRO'.")
+        logger.info("ℹ️ RUNT indica: 'No se ha encontrado la persona en estado ACTIVA o SIN REGISTRO'.")
 
     # Intentar hacer clic en el botón Aceptar
     try:
         popup.locator("button.swal2-confirm").click()
         if debug:
-            print("🧹 Botón 'Aceptar' (swal2-confirm) clickeado para cerrar el popup de 'sin registro'.")
+            logger.info("🧹 Botón 'Aceptar' (swal2-confirm) clickeado para cerrar el popup de 'sin registro'.")
     except Exception:
         try:
             page.get_by_role("button", name=re.compile(r"Aceptar", re.I)).first.click()
             if debug:
-                print("🧹 Botón 'Aceptar' clickeado (fallback get_by_role).")
+                logger.debug("🧹 Botón 'Aceptar' clickeado (fallback get_by_role).")
         except Exception:
             if debug:
-                print("⚠ No se pudo hacer clic automáticamente en 'Aceptar' (sin registro).")
+                logger.warning("⚠ No se pudo hacer clic automáticamente en 'Aceptar' (sin registro).")
 
     page.wait_for_timeout(800)
     return True
@@ -398,7 +402,7 @@ def click_consultar(page, debug: bool = True):
     Hace clic en el botón 'Consultar' o similar para enviar el formulario.
     """
     if debug:
-        print("🔘 Buscando botón 'Consultar'…")
+        logger.debug("🔘 Buscando botón 'Consultar'…")
 
     button_candidates = [
         "button[type='submit']",
@@ -409,7 +413,7 @@ def click_consultar(page, debug: bool = True):
     btn = pick_first_working_locator(page, button_candidates, "botón 'Consultar'")
     btn.click()
     if debug:
-        print("✅ Clic en botón 'Consultar' enviado.")
+        logger.debug("✅ Clic en botón 'Consultar' enviado.")
 
 
 
@@ -423,7 +427,7 @@ def expand_all_panels_and_wait_data(page, debug: bool = False, settle_ms: int = 
     """
     def log(msg: str) -> None:
         if debug:
-            print(msg)
+            logger.debug(msg)
 
     # Asegura que existan panels en DOM (aunque sea sin datos)
     try:
@@ -552,7 +556,7 @@ def run_runt_flow(
 
         try:
             if debug:
-                print("🌐 Abriendo portal del RUNT…")
+                logger.info("🌐 Abriendo portal del RUNT…")
             page.goto(
                 settings.runt_url,
                 timeout=settings.navigation_timeout_ms,
@@ -571,7 +575,7 @@ def run_runt_flow(
             # Llenar tipo + número
             # -----------------------------
             if debug:
-                print(f"📝 Seleccionando tipo='{tipo}' y llenando número='{numero}'…")
+                logger.debug(f"📝 Seleccionando tipo='{tipo}' y llenando número='{numero}'…")
             select_tipo_documento(page, tipo, debug=debug)
             fill_numero_documento(page, numero, debug=debug)
 
@@ -587,7 +591,7 @@ def run_runt_flow(
             while True:
                 intentos += 1
                 if debug:
-                    print(f"🔁 Intento de CAPTCHA #{intentos}…")
+                    logger.debug(f"🔁 Intento de CAPTCHA #{intentos}…")
 
                 if intentos > LIMITE_SEGURIDAD:
                     raise RuntimeError(
@@ -614,7 +618,7 @@ def run_runt_flow(
                     continue
 
                 if debug:
-                    print("✅ No se detectó error de CAPTCHA; continuando flujo.")
+                    logger.debug("✅ No se detectó error de CAPTCHA; continuando flujo.")
                 break
 
             # ----------------------------------------------------
@@ -622,7 +626,7 @@ def run_runt_flow(
             # ----------------------------------------------------
             if check_and_handle_person_not_found(page, debug=debug):
                 if debug:
-                    print("⚠ La persona no tiene registro ACTIVO en RUNT (o SIN REGISTRO).")
+                    logger.info("⚠ La persona no tiene registro ACTIVO en RUNT (o SIN REGISTRO).")
                 if hold_after and debug:
                     input("⏸ Documento sin registro. Presiona ENTER para cerrar el navegador…")
                 return None  # ✅ coherente con -> str | None
@@ -631,7 +635,7 @@ def run_runt_flow(
             # Capturar HTML de resultados
             # ----------------------------------------------------
             if debug:
-                print("⏳ Consulta enviada satisfactoriamente. Capturando resultados…")
+                logger.info("⏳ Consulta enviada satisfactoriamente. Capturando resultados…")
 
             # Esperamos un elemento típico de resultados (puede cambiar, pero sirve como ancla)
             try:
@@ -639,7 +643,7 @@ def run_runt_flow(
             except PWTimeoutError:
                 # No lo tratamos como fatal: igual intentamos capturar lo que haya
                 if debug:
-                    print("⚠ No apareció 'mat-expansion-panel' a tiempo. Capturando HTML de todas formas…")
+                    logger.warning("⚠ No apareció 'mat-expansion-panel' a tiempo. Capturando HTML de todas formas…")
             
     
             expand_all_panels_and_wait_data(page, debug=debug)
@@ -648,10 +652,19 @@ def run_runt_flow(
             html = page.content()
 
             if debug:
-                print("🧪 HTML size:", len(html))
-                print("🧪 contains mat-expansion-panel:", "mat-expansion-panel" in html)
-                print("🧪 contains LICENCIAS keyword:", "Licencias de conducción" in html or "LICENCIA" in html.upper())
-                print("🧪 contains tbody rows:", "<tbody" in html and "<tr" in html)
+                logger.debug("🧪 HTML size: %s", len(html))
+                logger.debug(
+                    "🧪 contains mat-expansion-panel: %s",
+                    "mat-expansion-panel" in html,
+                )
+                logger.debug(
+                    "🧪 contains LICENCIAS keyword: %s",
+                    "Licencias de conducción" in html or "LICENCIA" in html.upper(),
+                )
+                logger.debug(
+                    "🧪 contains tbody rows: %s",
+                    "<tbody" in html and "<tr" in html,
+                )
 
 
             if hold_after and debug:
