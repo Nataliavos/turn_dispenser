@@ -1,4 +1,4 @@
-# turnero.py
+# services/runt_playwright.py
 # ------------------------------------------------------------
 # Automatización del portal público del RUNT (https://portalpublico.runt.gov.co)
 # Objetivo:
@@ -10,13 +10,11 @@
 #   - Enviar la consulta.
 #   - Detectar si se cargaron los resultados.
 #
-# Este flujo usa Playwright, una librería moderna de automatización de navegadores.
+# Este módulo es el camino activo de automatización RUNT (vía controllers/services).
+# Entry points de la app: app.py (consola) y app_gui.py (GUI).
 # Requiere haber ejecutado antes:
 #   pip install playwright
-#   python -m playwright install
-#
-# Uso:
-#   python turnero.py --tipo CC --numero 123456789 --hold
+#   python -m playwright install chromium
 #
 # ------------------------------------------------------------
 # IMPORTACIONES
@@ -252,7 +250,7 @@ def try_capture_and_solve_captcha(page, resolver_captcha=None, debug: bool = Tru
     if resolver_captcha is not None:
         captcha_text = resolver_captcha(image_bytes)
     else:
-        # Modo “legacy” consola: guardar PNG y pedir input aquí mismo
+        # Fallback consola: guardar PNG y pedir input aquí mismo
         tmp_path = Path("captcha.png").absolute()
         tmp_path.write_bytes(image_bytes)
         if debug:
