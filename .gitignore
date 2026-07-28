@@ -1,16 +1,47 @@
 # =============================
-# ENTORNOS VIRTUALES
+# ENTORNOS VIRTUALES / PYTHON
 # =============================
+.venv/
 venv/
+ENV/
+env/
+*/.venv/
 */venv/
-captcha.png
 
 # =============================
-# ARCHIVOS COMPILADOS Y CACHÉ
+# CACHÉ Y ARTEFACTOS PYTHON
 # =============================
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+share/python-wheels/
+
+# =============================
+# HERRAMIENTAS DE TEST / LINT / TIPADO
+# =============================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.cache/
+pyrightconfig.json.bak
 
 # =============================
 # CONFIGURACIÓN DE EDITORES / IDEs
@@ -19,31 +50,89 @@ __pycache__/
 .idea/
 .cursor/
 *.code-workspace
+*.sublime-project
+*.sublime-workspace
 
 # =============================
-# LOGS Y ARCHIVOS TEMPORALES
+# SISTEMA OPERATIVO
+# =============================
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*~
+
+# =============================
+# LOGS Y TEMPORALES
 # =============================
 *.log
+logs/
 *.tmp
+*.temp
 *.bak
 *.swp
 *.swo
-*.DS_Store
-Thumbs.db
+*.orig
+*.rej
 
 # =============================
-# PLAYWRIGHT / TESTS
+# PLAYWRIGHT / AUTOMATIZACIÓN
 # =============================
 test-results/
 playwright-report/
+playwright/.cache/
 screenshots/
 videos/
 trace.zip
+blob-report/
+
+# CAPTCHA y capturas locales de depuración (nunca versionar)
+captcha.png
+captcha*.png
+**/captcha*.png
+debug_*.png
+debug_*.html
+*.har
+
+# Imagen suelta en raíz (no forma parte del producto)
+/image.png
 
 # =============================
-# ARCHIVOS DE CONFIGURACIÓN SENSIBLES
+# SECRETOS Y ENTORNOS LOCALES
 # =============================
-# Si llegas a usar variables de entorno o credenciales locales
-*.env
-.env.local
+# Plantilla .env.example SÍ se versiona.
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials.json
+
+# =============================
+# SUPABASE / DOCKER (local)
+# =============================
+# Mantener versionables: supabase/config.toml, migrations/, seed.sql
+# Ignorar estado local / temporales del CLI
+supabase/.branches
+supabase/.temp
+supabase/.env
+supabase/.env.*
+
+# Volúmenes y overrides locales de Docker
+docker-compose.override.yml
+.docker/
+
+# =============================
+# DOCS DE USO PERSONAL (no versionar)
+# =============================
+# Tickets, auditoría y backlog: solo trabajo local.
+# El PRD oficial (docs/product-requirements-document.md) sí puede versionarse.
+docs/tickets/
+docs/AUDITORIA_TECNICA.md
+docs/BACKLOG_IMPLEMENTACION.md
+docs/MAPA_DEPENDENCIAS_TICKETS.md
+docs/VALIDACION_PERSISTENCIA.md
+docs/RUNBOOK_PILOTO.md

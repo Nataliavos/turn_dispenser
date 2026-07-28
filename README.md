@@ -44,8 +44,8 @@ turn_dispenser/
 ├── INSTRUCCIONES_CMD.txt
 └── WORKFLOW.md
 
-
-> Nota: archivos legacy (si existen) se recomienda moverlos a `legacy/` para no confundir.
+Los únicos entry points soportados son `app.py` (consola) y `app_gui.py` (GUI).
+La automatización RUNT/SIMIT vive en `services/` y se orquesta desde `controllers/`.
 
 ---
 
