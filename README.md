@@ -122,6 +122,7 @@ cp .env.example .env
 - Variables `SUPABASE_*` / `DATABASE_URL` / `DB_CONNECT_TIMEOUT_S` / `PERSISTENCIA_ENABLED`
 - Guía: [`docs/persistencia.md`](docs/persistencia.md)
 - Smoke: `python scripts/smoke_persistencia.py`
+- E2E persistencia: `python scripts/verificar_persistencia_e2e.py` · [`docs/VALIDACION_PERSISTENCIA.md`](docs/VALIDACION_PERSISTENCIA.md)
 
 ---
 
@@ -162,10 +163,10 @@ supabase db reset   # aplica supabase/migrations + seed
 - Esquema BD + Supabase local Docker (D-01)
 - Capa de conexión y repositorios Postgres/Supabase (D-02)
 - Persistencia automática post-consulta en GUI/CLI (D-03)
+- Verificación E2E de persistencia documentada (D-04)
 
 ### Pendiente (alineado al PRD)
 
-- Verificación E2E de persistencia (D-04)
 - Piloto operativo / runbook (Fase E)
 - Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
 
@@ -186,10 +187,11 @@ turn_dispenser/
 │   ├── product-requirements-document.md   # PRD oficial
 │   ├── db-schema.md                       # esquema de persistencia
 │   ├── supabase-local.md                  # arranque Supabase + Docker
-│   └── persistencia.md                    # repositorios / DATABASE_URL
+│   ├── persistencia.md                    # repositorios / DATABASE_URL
+│   └── VALIDACION_PERSISTENCIA.md         # checklist E2E (D-04)
 ├── repositories/    # conexión psycopg + ConsultaRepository (D-02)
 ├── supabase/        # config CLI, migrations/, seed.sql
-├── scripts/         # apply_local_migrations.sh, smoke_persistencia.py
+├── scripts/         # migraciones locales, smoke y verificación E2E
 ├── .env.example
 ├── requirements.txt
 ├── requirements-dev.txt

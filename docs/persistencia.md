@@ -67,4 +67,13 @@ pytest tests/test_persistencia_mappers.py \
 
 Si el smoke falla por conexión: confirma `docker ps` (`supabase_db_*`), puerto **54322**, y `./scripts/apply_local_migrations.sh` si hace falta.
 
-Checklist operativo de escenarios DOCUMENTO/PLACA/parcial → ticket **D-04**.
+## Verificación E2E (D-04)
+
+Checklist + registro de ejecución: [`VALIDACION_PERSISTENCIA.md`](VALIDACION_PERSISTENCIA.md).
+
+```bash
+python scripts/verificar_persistencia_e2e.py
+# o: pytest tests/test_persistencia_e2e.py -v
+```
+
+Cubre DOCUMENTO ok, parcial, PLACA, fallo de BD y tipos JSONB/`raw_html` (portales mockeados; Postgres real).
