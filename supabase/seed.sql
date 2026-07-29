@@ -1,0 +1,9 @@
+-- Datos semilla opcionales para desarrollo local.
+-- Mantener vacío en el piloto: las consultas reales se generan desde la app.
+-- Ejemplo (comentado):
+--
+-- insert into public.consultas (
+--   correlation_id, modo, identificador, tipo_documento, estado, schema_version
+-- ) values (
+--   'seed-demo', 'DOCUMENTO', '0000000000', 'CC', 'ok', '1'
+-- );

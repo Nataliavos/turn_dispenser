@@ -39,7 +39,7 @@ En modo placa, el portal público RUNT no aplica; solo SIMIT.
 - BeautifulSoup4 — parseo HTML
 - PyQt6 — interfaz gráfica
 - python-dotenv — configuración externa (`.env`)
-- Persistencia prevista: **Supabase local con Docker** (PostgreSQL del stack Supabase). Aún no implementada.
+- Persistencia: **Supabase local con Docker** (PostgreSQL del stack). Esquema y arranque en D-01; repositorios en D-02.
 
 Dependencias de runtime: ver [`requirements.txt`](requirements.txt) (solo paquetes directos).
 
@@ -119,7 +119,25 @@ cp .env.example .env
 - `.env` / `.env.local` están ignorados por git
 - Por defecto `BROWSER_HEADLESS=false` (CAPTCHA RUNT manual)
 - `LOG_LEVEL` / `LOG_FILE` opcionales (sin archivo por defecto; solo stderr)
-- Variables `SUPABASE_*` / `DATABASE_URL` están documentadas como placeholders para Fase D; aún no se usan en runtime
+- Variables `SUPABASE_*` / `DATABASE_URL`: entorno local D-01 listo; la app aún no escribe en BD (D-02/D-03)
+
+---
+
+## Base de datos local (Supabase + Docker)
+
+```bash
+# Requisitos: Docker + Supabase CLI
+supabase start
+supabase db reset   # aplica supabase/migrations + seed
+
+# Workaround si el repo está en NTFS /media/... (Docker no monta):
+./scripts/apply_local_migrations.sh
+# Reaplicar esquema desde cero (solo local):
+./scripts/apply_local_migrations.sh --reset
+```
+
+- Arranque / parada / variables: [`docs/supabase-local.md`](docs/supabase-local.md)
+- Entidades, índices, retención `raw_html`: [`docs/db-schema.md`](docs/db-schema.md)
 
 ---
 
@@ -139,10 +157,11 @@ cp .env.example .env
 - Modelos de dominio tipados / versionados (C-01)
 - Fixtures HTML + tests offline de parsers (C-02)
 - Helpers compartidos parsers/Playwright (C-03)
+- Esquema BD + Supabase local Docker (D-01)
 
 ### Pendiente (alineado al PRD)
 
-- Persistencia con **Supabase + Docker** (Fase D)
+- Capa de conexión / repositorios e integración post-consulta (D-02 … D-04)
 - Piloto operativo / runbook (Fase E)
 - Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
 
@@ -160,7 +179,11 @@ turn_dispenser/
 ├── views/           # GUI y consola
 ├── utils/           # validación de placa, etc.
 ├── docs/
-│   └── product-requirements-document.md   # PRD oficial
+│   ├── product-requirements-document.md   # PRD oficial
+│   ├── db-schema.md                       # esquema de persistencia
+│   └── supabase-local.md                  # arranque Supabase + Docker
+├── supabase/        # config CLI, migrations/, seed.sql
+├── scripts/         # apply_local_migrations.sh (workaround NTFS)
 ├── .env.example
 ├── requirements.txt
 ├── requirements-dev.txt
