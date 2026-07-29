@@ -91,6 +91,19 @@ Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE
 
 ---
 
+## Tests de parsers (offline)
+
+Suite sin red ni navegador sobre fixtures HTML anonimizados:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests/test_runt_parser.py tests/test_simit_parser.py -v
+```
+
+Fixtures y guía para capturar/actualizar HTML: [`fixtures/README.md`](fixtures/README.md).
+
+---
+
 ## Configuración
 
 Parámetros de runtime (URLs, timeouts, `slow_mo`, headless, debug, logging) se cargan desde entorno con defaults seguros:
@@ -123,10 +136,12 @@ cp .env.example .env
 - Logging estructurado con niveles y correlation id (B-02)
 - Validación de entradas de documento (tipo + número) en GUI/CLI (B-03)
 - Manejo unificado de errores por fuente RUNT/SIMIT (B-04)
+- Modelos de dominio tipados / versionados (C-01)
+- Fixtures HTML + tests offline de parsers (C-02)
 
 ### Pendiente (alineado al PRD)
 
-- Normalización de modelos + fixtures/tests de parsers (Fase C)
+- Helpers compartidos parsers/Playwright (C-03)
 - Persistencia con **Supabase + Docker** (Fase D)
 - Piloto operativo / runbook (Fase E)
 - Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
