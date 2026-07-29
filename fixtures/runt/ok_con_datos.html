@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>RUNT fixture OK (anonimizado)</title></head>
+<body>
+  <!-- Datos personales: layout label + b en columnas hermanas -->
+  <div class="row">
+    <div class="col"><label>NOMBRE COMPLETO:</label></div>
+    <div class="col"><b>PERSONA DE PRUEBA FICTICIA</b></div>
+  </div>
+  <div class="row">
+    <div class="col"><label>DOCUMENTO:</label></div>
+    <div class="col"><b>CC 1000000001</b></div>
+  </div>
+  <div class="row">
+    <div class="col"><label>ESTADO DE LA PERSONA:</label></div>
+    <div class="col"><b>ACTIVO</b></div>
+  </div>
+  <div class="row">
+    <div class="col"><label>ESTADO DEL CONDUCTOR:</label></div>
+    <div class="col"><b>ACTIVO</b></div>
+  </div>
+  <div class="row">
+    <div class="col"><label>NÚMERO DE INSCRIPCIÓN:</label></div>
+    <div class="col"><b>999000111</b></div>
+  </div>
+  <div class="row">
+    <div class="col"><label>FECHA DE INSCRIPCIÓN:</label></div>
+    <div class="col"><b>01/01/2020</b></div>
+  </div>
+
+  <mat-expansion-panel>
+    <span class="panel-title-text">LICENCIAS</span>
+    <div class="mat-expansion-panel-body">
+      <table>
+        <thead>
+          <tr>
+            <th>NÚMERO</th>
+            <th>CATEGORÍA</th>
+            <th>ESTADO</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>LIC-0001</td>
+            <td>B1</td>
+            <td>ACTIVA</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </mat-expansion-panel>
+
+  <mat-expansion-panel>
+    <span class="panel-title-text">MULTAS E INFRACCIONES</span>
+    <div class="mat-expansion-panel-body">
+      <table>
+        <thead>
+          <tr>
+            <th>NÚMERO</th>
+            <th>DESCRIPCIÓN</th>
+            <th>ESTADO</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MUL-0001</td>
+            <td>Infracción de prueba</td>
+            <td>PENDIENTE</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </mat-expansion-panel>
+
+  <mat-expansion-panel>
+    <span class="panel-title-text">VALIDACIÓN</span>
+    <div class="mat-expansion-panel-body">
+      <div class="row">
+        <div class="col"><label>INDICADOR DE ESTADO CIUDADANO:</label></div>
+        <div class="col"><b>VALIDADO</b></div>
+      </div>
+    </div>
+  </mat-expansion-panel>
+</body>
+</html>

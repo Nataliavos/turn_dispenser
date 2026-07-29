@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>SIMIT fixture OK (anonimizado)</title></head>
+<body>
+  <div id="resumenEstadoCuenta">
+    <div>
+      <label>Cédula:</label>
+      <strong>1000000001</strong>
+    </div>
+    <div>
+      <label>Comparendos:</label>
+      <strong>1</strong>
+    </div>
+    <div>
+      <label>Multas:</label>
+      <strong>1</strong>
+    </div>
+    <div>
+      <label>Acuerdos de pago:</label>
+      <strong>0</strong>
+    </div>
+    <div>
+      <label>Total:</label>
+      <strong>$ 250.000</strong>
+    </div>
+  </div>
+
+  <div class="card">
+    <table id="multaTable">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Notificación</th>
+          <th>Placa</th>
+          <th>Secretaría</th>
+          <th>Infracción</th>
+          <th>Estado</th>
+          <th>Valor</th>
+          <th>Valor a pagar</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td data-label="Tipo">
+            <a id="verDetalle" href="#"><span>CMP-TEST-0001</span></a>
+            <p>Comparendo</p>
+            <span>Fecha imposición: 15/03/2024</span>
+          </td>
+          <td data-label="Notificación">20/03/2024</td>
+          <td data-label="Placa">XYZ999</td>
+          <td data-label="Secretaría">Secretaría de Prueba</td>
+          <td data-label="Infracción">
+            <span data-content="Exceso de velocidad de prueba">
+              <label>C29</label>
+            </span>
+          </td>
+          <td data-label="Estado">Pendiente</td>
+          <td data-label="Valor">$ 250.000</td>
+          <td data-label="Valor a pagar">$ 250.000</td>
+        </tr>
+      </tbody>
+    </table>
+    <div>
+      <label>Total (1):</label>
+      <span class="font-weight-bold">$ 250.000</span>
+    </div>
+  </div>
+</body>
+</html>
