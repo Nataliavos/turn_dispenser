@@ -297,6 +297,14 @@ class MainWindow(QMainWindow):
         self.lbl_estado.setText(resumen_estados_consulta(resultado))
         self.log("✅ Consulta finalizada.")
         formatear_resultado_consulta(resultado, self.log)
+        if resultado.error_persistencia:
+            QMessageBox.warning(
+                self,
+                "No se guardó en la base de datos",
+                "La consulta se completó y los resultados se muestran aquí,\n"
+                "pero no se pudieron guardar en Supabase/Postgres.\n\n"
+                f"{resultado.error_persistencia}",
+            )
         self.btn_consultar.setEnabled(True)
 
     @pyqtSlot(str)

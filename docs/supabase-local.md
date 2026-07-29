@@ -115,7 +115,7 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
 
 Plantilla: `.env.example`.  
-`DATABASE_URL` la usa la capa `repositories/` (D-02, `psycopg`). El cableado en `ConsultaController` llega en D-03.
+`DATABASE_URL` la usa la capa `repositories/` y el guardado post-consulta (D-02/D-03).
 
 ---
 

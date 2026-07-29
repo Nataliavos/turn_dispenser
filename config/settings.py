@@ -81,9 +81,13 @@ class Settings:
     simit_results_timeout_ms: int
     runt_captcha_timeout_ms: int
 
-    # Persistencia (D-01/D-02): Postgres del stack Supabase local.
+    # Persistencia (D-01…D-03): Postgres del stack Supabase local.
     database_url: Optional[str]
     db_connect_timeout_s: int
+    persistencia_enabled: bool
+    operador: Optional[str]
+    estacion: Optional[str]
+    app_version: Optional[str]
     supabase_url: Optional[str]
     supabase_anon_key: Optional[str]
     supabase_service_role_key: Optional[str]
@@ -121,6 +125,10 @@ def get_settings() -> Settings:
         runt_captcha_timeout_ms=_env_int("RUNT_CAPTCHA_TIMEOUT_MS", 45_000),
         database_url=_env_optional_str("DATABASE_URL"),
         db_connect_timeout_s=_env_int("DB_CONNECT_TIMEOUT_S", 10),
+        persistencia_enabled=_env_bool("PERSISTENCIA_ENABLED", True),
+        operador=_env_optional_str("OPERADOR"),
+        estacion=_env_optional_str("ESTACION"),
+        app_version=_env_optional_str("APP_VERSION"),
         supabase_url=_env_optional_str("SUPABASE_URL"),
         supabase_anon_key=_env_optional_str("SUPABASE_ANON_KEY"),
         supabase_service_role_key=_env_optional_str("SUPABASE_SERVICE_ROLE_KEY"),

@@ -2,6 +2,7 @@ import threading
 from typing import Optional
 
 from config.settings import get_settings
+from controllers.persistencia_post_consulta import intentar_persistir_resultado
 from controllers.runt_controller import RuntController, ResolverCaptcha
 from controllers.simit_controller import SimitController
 from models.consulta_models import ConsultaParams, ResultadoConsulta
@@ -79,11 +80,14 @@ class ConsultaController:
             )
             self._aplicar_resultado_simit(resultado, simit)
             resultado.finalizar()
+            intentar_persistir_resultado(resultado)
             logger.info(
-                "Consulta PLACA finalizada cid=%s estado_simit=%s estado_global=%s",
+                "Consulta PLACA finalizada cid=%s estado_simit=%s estado_global=%s "
+                "persistido=%s",
                 cid,
                 resultado.estado_fuente_simit(),
                 resultado.estado_global,
+                resultado.persistido,
             )
             return resultado
 
@@ -130,12 +134,14 @@ class ConsultaController:
             self._aplicar_resultado_simit(resultado, simit_holder["result"])
 
         resultado.finalizar()
+        intentar_persistir_resultado(resultado)
         logger.info(
             "Consulta DOCUMENTO finalizada cid=%s estado_runt=%s estado_simit=%s "
-            "estado_global=%s",
+            "estado_global=%s persistido=%s",
             cid,
             resultado.estado_fuente_runt(),
             resultado.estado_fuente_simit(),
             resultado.estado_global,
+            resultado.persistido,
         )
         return resultado

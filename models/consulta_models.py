@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal, Optional
+from uuid import UUID
 
 from models.runt_models import ResultadoRunt
 from models.simit_models import ResultadoSimit
@@ -40,7 +41,7 @@ class ResultadoConsulta:
     Resultado agregado de una consulta RUNT/SIMIT.
 
     Metadatos (correlation_id, timestamps, estado_global) soportan trazabilidad
-    y persistencia futura; no implican decisión de trámite.
+    y persistencia; no implican decisión de trámite.
     """
 
     modo: str
@@ -54,6 +55,12 @@ class ResultadoConsulta:
     resultado_simit: Optional[ResultadoSimit] = None
     error_runt: Optional[str] = None
     error_simit: Optional[str] = None
+
+    # Persistencia post-consulta (D-03). No afectan scraping.
+    persistido: Optional[bool] = None
+    consulta_db_id: Optional[UUID] = None
+    error_persistencia: Optional[str] = None
+    persistencia_omitida: bool = False
 
     def estado_fuente_runt(self) -> EstadoFuente:
         """Resumen corto para UI: ok | error | sin_registro | omitido."""
