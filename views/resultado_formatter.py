@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Any, Callable
 
 from models.consulta_models import ResultadoConsulta
 from models.runt_models import ResultadoRunt
@@ -31,6 +31,8 @@ def resumen_estados_consulta(resultado: ResultadoConsulta) -> str:
 
 def formatear_resultado_consulta(resultado: ResultadoConsulta, emit: EmitFn) -> None:
     """Presenta errores y datos por fuente con la misma semántica."""
+    _formatear_metadatos_consulta(resultado, emit)
+
     if resultado.error_runt:
         emit(f"❌ Error RUNT: {resultado.error_runt}")
     elif resultado.resultado_runt is not None:
@@ -42,8 +44,24 @@ def formatear_resultado_consulta(resultado: ResultadoConsulta, emit: EmitFn) -> 
         formatear_resultado_simit(resultado.resultado_simit, emit)
 
 
+def _formatear_metadatos_consulta(resultado: ResultadoConsulta, emit: EmitFn) -> None:
+    """Cabecera ligera de trazabilidad (no afecta semántica de fuentes)."""
+    partes: list[str] = []
+    if resultado.correlation_id:
+        partes.append(f"cid={resultado.correlation_id}")
+    if resultado.estado_global:
+        partes.append(f"estado={resultado.estado_global}")
+    if resultado.iniciado_en:
+        partes.append(f"inicio={resultado.iniciado_en.isoformat()}")
+    if resultado.finalizado_en:
+        partes.append(f"fin={resultado.finalizado_en.isoformat()}")
+    if partes:
+        emit("Consulta: " + " | ".join(partes))
+
+
 def formatear_resultado_runt(resultado: ResultadoRunt, emit: EmitFn) -> None:
     emit("\n══════════ RUNT ══════════")
+    emit(f"schema_version: {resultado.schema_version}")
 
     if resultado.error:
         emit(f"❌ Error RUNT: {resultado.error}")
@@ -55,7 +73,18 @@ def formatear_resultado_runt(resultado: ResultadoRunt, emit: EmitFn) -> None:
 
     emit(f"Nombre: {resultado.nombre}")
     emit(f"Estado conductor: {resultado.estado_licencia}")
-    emit(f"Tiene multas (RUNT): {resultado.tiene_multas}")
+    if resultado.tipo_documento or resultado.numero_documento:
+        emit(
+            f"Documento: {resultado.tipo_documento or '?'} "
+            f"{resultado.numero_documento or ''}".rstrip()
+        )
+    if resultado.estado_persona:
+        emit(f"Estado persona: {resultado.estado_persona}")
+    # Heurística derivada — no implica elegibilidad de trámite
+    emit(
+        "Multas inferidas (heurística RUNT, no elegibilidad): "
+        f"{resultado.tiene_multas_inferidas}"
+    )
 
     secciones = resultado.secciones or {}
     for titulo, contenido in secciones.items():
@@ -65,6 +94,7 @@ def formatear_resultado_runt(resultado: ResultadoRunt, emit: EmitFn) -> None:
 
 def formatear_resultado_simit(resultado: ResultadoSimit, emit: EmitFn) -> None:
     emit("\n══════════ SIMIT ══════════")
+    emit(f"schema_version: {resultado.schema_version}")
 
     if resultado.error:
         emit(f"❌ Error SIMIT: {resultado.error}")
@@ -136,7 +166,7 @@ def formatear_resultado_simit(resultado: ResultadoSimit, emit: EmitFn) -> None:
             emit(f"  Total acuerdos ({t.cantidad}): {t.valor or ''}")
 
 
-def _formatear_contenido(contenido, emit: EmitFn) -> None:
+def _formatear_contenido(contenido: Any, emit: EmitFn) -> None:
     if contenido is None:
         emit("Sin información.")
     elif isinstance(contenido, list):

@@ -74,6 +74,12 @@ class ConsultaControllerAislamientoTests(unittest.TestCase):
         self.assertEqual(out.resultado_runt.nombre, "Ana")
         self.assertIsNotNone(out.error_simit)
         self.assertIn("SIMIT", out.error_simit)
+        self.assertIsNotNone(out.correlation_id)
+        self.assertIsNotNone(out.iniciado_en)
+        self.assertIsNotNone(out.finalizado_en)
+        self.assertEqual(out.estado_global, "parcial")
+        self.assertEqual(out.resultado_runt.schema_version, "1")
+        self.assertEqual(out.resultado_simit.schema_version, "1")
 
     def test_falla_runt_no_tumba_simit(self) -> None:
         ctrl = ConsultaController()

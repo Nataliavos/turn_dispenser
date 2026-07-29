@@ -64,6 +64,10 @@ class ConsultaController:
             modo=params.modo,
             identificador=params.identificador,
         )
+        resultado.marcar_inicio(
+            correlation_id=cid,
+            tipo_documento=params.tipo_documento,
+        )
 
         if params.modo == "PLACA":
             simit = self._simit.consultar(
@@ -74,10 +78,12 @@ class ConsultaController:
                 debug=debug,
             )
             self._aplicar_resultado_simit(resultado, simit)
+            resultado.finalizar()
             logger.info(
-                "Consulta PLACA finalizada cid=%s estado_simit=%s",
+                "Consulta PLACA finalizada cid=%s estado_simit=%s estado_global=%s",
                 cid,
                 resultado.estado_fuente_simit(),
+                resultado.estado_global,
             )
             return resultado
 
@@ -123,10 +129,13 @@ class ConsultaController:
         if simit_holder["result"] is not None:
             self._aplicar_resultado_simit(resultado, simit_holder["result"])
 
+        resultado.finalizar()
         logger.info(
-            "Consulta DOCUMENTO finalizada cid=%s estado_runt=%s estado_simit=%s",
+            "Consulta DOCUMENTO finalizada cid=%s estado_runt=%s estado_simit=%s "
+            "estado_global=%s",
             cid,
             resultado.estado_fuente_runt(),
             resultado.estado_fuente_simit(),
+            resultado.estado_global,
         )
         return resultado
