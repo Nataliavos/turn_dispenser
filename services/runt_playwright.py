@@ -28,32 +28,9 @@ from pathlib import Path
 from config.settings import get_settings
 
 from utils.logging_setup import get_logger
+from services.playwright_helpers import pick_first_working_locator
 
 logger = get_logger(__name__)
-
-
-# ------------------------------------------------------------
-# FUNCIÓN AUXILIAR 1: buscar el primer selector que funcione
-# ------------------------------------------------------------
-def pick_first_working_locator(page, locator_candidates, description="elemento"):
-    """
-    Intenta encontrar un elemento en la página usando una lista de posibles selectores.
-    Retorna el primer selector que encuentre visible.
-    Esto se usa porque las páginas Angular (como la del RUNT) pueden tener nombres dinámicos.
-    """
-    for css_or_getter in locator_candidates:
-        try:
-            # css_or_getter puede ser:
-            # 1) un string CSS ("input[name='numeroDocumento']")
-            # 2) una función que devuelve un locator (lambda p: p.get_by_label(...))
-            loc = css_or_getter(page) if callable(css_or_getter) else page.locator(css_or_getter)
-            loc.wait_for(state="visible", timeout=5000)
-            return loc
-        except PWTimeoutError:
-            continue
-        except Exception:
-            continue
-    raise RuntimeError(f"No se encontró {description}. Ajusta los selectores según el HTML real.")
 
 
 # ------------------------------------------------------------
