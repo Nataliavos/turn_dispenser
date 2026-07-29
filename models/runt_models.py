@@ -1,16 +1,18 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 
+
 @dataclass
 class ConsultaRuntParams:
     tipo_documento: str
     numero_documento: str
 
+
 @dataclass
 class ResultadoRunt:
-     # Resumen
+    # Resumen
     nombre: Optional[str] = None
-    estado_licencia: Optional[str] = None  # aquí usaremos "estado_conductor" del parser
+    estado_licencia: Optional[str] = None  # "estado_conductor" del parser
     tiene_multas: Optional[bool] = None
 
     # Datos completos parseados por secciones
@@ -19,3 +21,5 @@ class ResultadoRunt:
     # Debug / trazabilidad
     raw_html: Optional[str] = None
     sin_registro: bool = False
+    # Fallo operativo de la fuente (simétrico a ResultadoSimit.error)
+    error: Optional[str] = None

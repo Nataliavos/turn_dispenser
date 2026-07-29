@@ -5,8 +5,8 @@ from config.settings import get_settings
 from controllers.runt_controller import RuntController, ResolverCaptcha
 from controllers.simit_controller import SimitController
 from models.consulta_models import ConsultaParams, ResultadoConsulta
-from models.runt_models import ConsultaRuntParams
-from models.simit_models import ConsultaSimitParams
+from models.runt_models import ConsultaRuntParams, ResultadoRunt
+from models.simit_models import ConsultaSimitParams, ResultadoSimit
 from utils.logging_setup import (
     ensure_correlation_id,
     get_logger,
@@ -18,9 +18,29 @@ logger = get_logger(__name__)
 
 
 class ConsultaController:
-    def __init__(self):
+    def __init__(self) -> None:
         self._runt = RuntController()
         self._simit = SimitController()
+
+    @staticmethod
+    def _aplicar_resultado_runt(
+        destino: ResultadoConsulta,
+        resultado: ResultadoRunt,
+    ) -> None:
+        destino.resultado_runt = resultado
+        if resultado.error:
+            destino.error_runt = resultado.error
+            logger.error("Error RUNT en ResultadoConsulta: %s", resultado.error)
+
+    @staticmethod
+    def _aplicar_resultado_simit(
+        destino: ResultadoConsulta,
+        resultado: ResultadoSimit,
+    ) -> None:
+        destino.resultado_simit = resultado
+        if resultado.error:
+            destino.error_simit = resultado.error
+            logger.error("Error SIMIT en ResultadoConsulta: %s", resultado.error)
 
     def consultar(
         self,
@@ -46,17 +66,19 @@ class ConsultaController:
         )
 
         if params.modo == "PLACA":
-            resultado.resultado_simit = self._simit.consultar(
+            simit = self._simit.consultar(
                 ConsultaSimitParams(
                     identificador=params.identificador,
                     modo="PLACA",
                 ),
                 debug=debug,
             )
-            if resultado.resultado_simit.error:
-                resultado.error_simit = resultado.resultado_simit.error
-                logger.error("Error SIMIT (PLACA): %s", resultado.error_simit)
-            logger.info("Consulta PLACA finalizada cid=%s", cid)
+            self._aplicar_resultado_simit(resultado, simit)
+            logger.info(
+                "Consulta PLACA finalizada cid=%s estado_simit=%s",
+                cid,
+                resultado.estado_fuente_simit(),
+            )
             return resultado
 
         # Modo DOCUMENTO: SIMIT en hilo aparte; RUNT en el hilo actual
@@ -70,47 +92,41 @@ class ConsultaController:
             modo="DOCUMENTO",
         )
 
-        simit_holder: dict = {"result": None, "error": None}
+        simit_holder: dict = {"result": None}
 
         def _consultar_simit() -> None:
             set_correlation_id(cid)
+            # El controller no debe propagar; red de seguridad por si acaso.
             try:
                 simit_holder["result"] = self._simit.consultar(
                     params=simit_params, debug=debug
                 )
             except Exception as e:
-                logger.error("Error hilo SIMIT: %s", e, exc_info=True)
-                simit_holder["error"] = str(e)
+                from models.exceptions import FUENTE_SIMIT, mensaje_accionable_fuente
+
+                msg = mensaje_accionable_fuente(FUENTE_SIMIT, e)
+                logger.error("Error inesperado hilo SIMIT: %s", msg, exc_info=True)
+                simit_holder["result"] = ResultadoSimit(error=msg)
 
         simit_thread = threading.Thread(target=_consultar_simit, daemon=True)
         simit_thread.start()
 
-        try:
-            ensure_correlation_id()
-            resultado.resultado_runt = self._runt.consultar_ciudadano(
-                params=runt_params,
-                resolver_captcha=resolver_captcha,
-                debug=debug,
-            )
-        except Exception as e:
-            logger.error("Error consulta RUNT: %s", e, exc_info=True)
-            resultado.error_runt = str(e)
+        ensure_correlation_id()
+        runt = self._runt.consultar_ciudadano(
+            params=runt_params,
+            resolver_captcha=resolver_captcha,
+            debug=debug,
+        )
+        self._aplicar_resultado_runt(resultado, runt)
 
         simit_thread.join()
-
-        if simit_holder["error"]:
-            resultado.error_simit = simit_holder["error"]
-            logger.error("Error SIMIT (DOCUMENTO): %s", resultado.error_simit)
-        elif simit_holder["result"] is not None:
-            resultado.resultado_simit = simit_holder["result"]
-            if simit_holder["result"].error:
-                resultado.error_simit = simit_holder["result"].error
-                logger.error("Error SIMIT (DOCUMENTO): %s", resultado.error_simit)
+        if simit_holder["result"] is not None:
+            self._aplicar_resultado_simit(resultado, simit_holder["result"])
 
         logger.info(
-            "Consulta DOCUMENTO finalizada cid=%s error_runt=%s error_simit=%s",
+            "Consulta DOCUMENTO finalizada cid=%s estado_runt=%s estado_simit=%s",
             cid,
-            bool(resultado.error_runt),
-            bool(resultado.error_simit),
+            resultado.estado_fuente_runt(),
+            resultado.estado_fuente_simit(),
         )
         return resultado

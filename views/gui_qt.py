@@ -35,6 +35,10 @@ from controllers.consulta_controller import ConsultaController
 from models.consulta_models import ConsultaParams
 from utils.documento_validator import validar_documento
 from utils.placa_validator import es_placa_valida, normalizar_placa, MENSAJE_PLACA_INVALIDA
+from views.resultado_formatter import (
+    formatear_resultado_consulta,
+    resumen_estados_consulta,
+)
 
 
 # ------------------------------------------------------------
@@ -290,120 +294,10 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(object)
     def _on_worker_finished(self, resultado):
-        self.lbl_estado.setText("Consulta completada.")
+        self.lbl_estado.setText(resumen_estados_consulta(resultado))
         self.log("✅ Consulta finalizada.")
-
-        if resultado.error_runt:
-            self.log(f"❌ Error RUNT: {resultado.error_runt}")
-        if resultado.error_simit:
-            self.log(f"❌ Error SIMIT: {resultado.error_simit}")
-
-        if resultado.resultado_runt:
-            self._mostrar_resultado_runt(resultado.resultado_runt)
-
-        if resultado.resultado_simit:
-            self._mostrar_resultado_simit(resultado.resultado_simit)
-
+        formatear_resultado_consulta(resultado, self.log)
         self.btn_consultar.setEnabled(True)
-
-    def _mostrar_resultado_runt(self, resultado):
-        self.log("\n══════════ RUNT ══════════")
-
-        if resultado.sin_registro:
-            self.log("Sin registro ACTIVO en RUNT.")
-            return
-
-        self.log(f"Nombre: {resultado.nombre}")
-        self.log(f"Estado conductor: {resultado.estado_licencia}")
-        self.log(f"Tiene multas (RUNT): {resultado.tiene_multas}")
-
-        secciones = resultado.secciones or {}
-        for titulo, contenido in secciones.items():
-            self.log(f"\n--- {titulo} ---")
-            self._log_contenido(contenido)
-
-    def _mostrar_resultado_simit(self, resultado):
-        self.log("\n══════════ SIMIT ══════════")
-
-        if resultado.error:
-            self.log(f"Error: {resultado.error}")
-            return
-
-        if resultado.sin_registro:
-            self.log("No se detectaron resultados en SIMIT.")
-            return
-
-        resumen = resultado.resumen
-        if resumen:
-            self.log(f"Identificador: {resumen.identificador}")
-            if resumen.cedula:
-                self.log(f"Cédula: {resumen.cedula}")
-            self.log(f"Comparendos: {resumen.comparendos}")
-            self.log(f"Multas: {resumen.multas}")
-            self.log(f"Acuerdos de pago: {resumen.acuerdos_pago}")
-            self.log(f"Total: {resumen.total}")
-
-        if resultado.comparendos_multas:
-            self.log(f"\n--- Comparendos y Multas ({len(resultado.comparendos_multas)}) ---")
-            for i, item in enumerate(resultado.comparendos_multas, start=1):
-                self.log(f"  Registro #{i}")
-                self.log(f"    Número: {item.numero}")
-                self.log(f"    Tipo: {item.tipo}")
-                self.log(f"    Fecha imposición: {item.fecha_imposicion}")
-                self.log(f"    Placa: {item.placa}")
-                self.log(f"    Secretaría: {item.secretaria}")
-                self.log(f"    Infracción: {item.infraccion}")
-                if item.infraccion_descripcion:
-                    self.log(f"    Descripción: {item.infraccion_descripcion}")
-                self.log(f"    Estado: {item.estado}")
-                self.log(f"    Valor: {item.valor}")
-                self.log(f"    Valor a pagar: {item.valor_a_pagar}")
-
-            if resultado.total_comparendos_multas:
-                t = resultado.total_comparendos_multas
-                self.log(f"  Total ({t.cantidad}): {t.valor or ''}")
-
-        hay_acuerdos = (
-            resultado.acuerdos_pago
-            or resultado.total_acuerdos_pago
-            or (resumen and resumen.acuerdos_pago > 0)
-        )
-        if hay_acuerdos:
-            cantidad = len(resultado.acuerdos_pago) or (
-                resultado.total_acuerdos_pago.cantidad if resultado.total_acuerdos_pago else
-                (resumen.acuerdos_pago if resumen else 0)
-            )
-            self.log(f"\n--- Acuerdos de pago ({cantidad}) ---")
-            for i, item in enumerate(resultado.acuerdos_pago, start=1):
-                self.log(f"  Acuerdo #{i}")
-                self.log(f"    Número: {item.numero_acuerdo}")
-                self.log(f"    Fecha: {item.fecha}")
-                self.log(f"    Secretaría: {item.secretaria}")
-                self.log(f"    Valor acuerdo: {item.valor_acuerdo}")
-                self.log(f"    Pendiente: {item.pendiente}")
-                self.log(f"    Cuota: {item.cuota}")
-                self.log(f"    Valor a pagar: {item.valor_a_pagar}")
-
-            if resultado.total_acuerdos_pago:
-                t = resultado.total_acuerdos_pago
-                self.log(f"  Total acuerdos ({t.cantidad}): {t.valor or ''}")
-
-    def _log_contenido(self, contenido):
-        if contenido is None:
-            self.log("Sin información.")
-        elif isinstance(contenido, list):
-            for i, item in enumerate(contenido, start=1):
-                self.log(f"  Registro #{i}")
-                if isinstance(item, dict):
-                    for k, v in item.items():
-                        self.log(f"    {k}: {v}")
-                else:
-                    self.log(f"    {item}")
-        elif isinstance(contenido, dict):
-            for k, v in contenido.items():
-                self.log(f"  {k}: {v}")
-        else:
-            self.log(f"  {contenido}")
 
     @pyqtSlot(str)
     def _on_worker_error(self, error_msg: str):
