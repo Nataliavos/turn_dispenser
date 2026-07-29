@@ -1,6 +1,7 @@
 from typing import Optional
 
 from config.settings import get_settings
+from models.exceptions import FUENTE_SIMIT, mensaje_accionable_fuente
 from models.simit_models import ConsultaSimitParams, ResultadoSimit
 from services.simit_playwright import run_simit_flow
 from services.simit_parser import parse_simit_html
@@ -15,6 +16,11 @@ class SimitController:
         params: ConsultaSimitParams,
         debug: Optional[bool] = None,
     ) -> ResultadoSimit:
+        """
+        Orquesta la consulta SIMIT.
+
+        No propaga excepciones operativas: las representa en ``ResultadoSimit.error``.
+        """
         settings = get_settings()
         if debug is None:
             debug = settings.debug
@@ -40,15 +46,19 @@ class SimitController:
                 identificador=params.identificador,
                 modo=params.modo,
             )
+
+            # Vacío / sin pendientes no es error operativo.
             if resultado.error:
-                logger.error("Parseo/resultado SIMIT con error: %s", resultado.error)
+                logger.error("Resultado SIMIT con error: %s", resultado.error)
+            elif resultado.sin_registro:
+                logger.info("Consulta SIMIT sin resultados detectados.")
+            elif resultado.resumen and resultado.resumen.sin_pendientes:
+                logger.info("Consulta SIMIT OK (sin pendientes).")
             else:
-                logger.info(
-                    "Consulta SIMIT OK sin_registro=%s",
-                    resultado.sin_registro,
-                )
+                logger.info("Consulta SIMIT OK.")
             return resultado
 
         except Exception as e:
-            logger.error("Error en consulta SIMIT: %s", e, exc_info=True)
-            return ResultadoSimit(error=str(e))
+            msg = mensaje_accionable_fuente(FUENTE_SIMIT, e)
+            logger.error("Error en consulta SIMIT: %s", msg, exc_info=True)
+            return ResultadoSimit(error=msg)

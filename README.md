@@ -122,10 +122,10 @@ cp .env.example .env
 - Configuración externa vía `.env` / defaults (`config/`) (B-01)
 - Logging estructurado con niveles y correlation id (B-02)
 - Validación de entradas de documento (tipo + número) en GUI/CLI (B-03)
+- Manejo unificado de errores por fuente RUNT/SIMIT (B-04)
 
 ### Pendiente (alineado al PRD)
 
-- Unificación de errores por fuente (B-04)
 - Normalización de modelos + fixtures/tests de parsers (Fase C)
 - Persistencia con **Supabase + Docker** (Fase D)
 - Piloto operativo / runbook (Fase E)

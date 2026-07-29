@@ -80,6 +80,10 @@ def main() -> None:
     )
 
     # Salida orientada al operador (stdout).
+    if resultado.error:
+        print(f"❌ Error RUNT: {resultado.error}")
+        raise SystemExit(1)
+
     print("✅ Consulta completada:")
     print(f"Sin registro: {resultado.sin_registro}")
     print(f"Nombre: {resultado.nombre}")

@@ -345,7 +345,11 @@ def parse_simit_html(
         or soup.find(id="acuerdoTable")
         or resumen.mensaje_estado
     )
-    sin_registro = not tiene_datos
+    # "Sin pendientes" es un resultado válido (vacío), no un fallo ni "sin registro".
+    if resumen.sin_pendientes:
+        sin_registro = False
+    else:
+        sin_registro = not bool(tiene_datos)
 
     return ResultadoSimit(
         resumen=resumen,
@@ -355,6 +359,7 @@ def parse_simit_html(
         total_acuerdos_pago=total_ac,
         raw_html=raw_html,
         sin_registro=sin_registro,
+        error=None,
         datos_raw={
             "resumen_pairs": _extract_label_strong_pairs(soup.find(id="resumenEstadoCuenta")),
         },
