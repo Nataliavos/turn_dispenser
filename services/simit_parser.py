@@ -13,15 +13,12 @@ from models.simit_models import (
     ResultadoSimit,
     TotalSeccion,
 )
+from services.parse_helpers import clean_text, extract_label_with_strong_value_pairs
 
 _MENSAJES_IGNORAR = re.compile(
     r"ingresa el correo|correo electr[oó]nico|enviar el estado de cuenta",
     re.I,
 )
-
-
-def _clean_text(s: str) -> str:
-    return " ".join((s or "").split()).strip()
 
 
 def _parse_int(value: Optional[str]) -> int:
@@ -35,7 +32,7 @@ def _extract_currency(text: Optional[str]) -> Optional[str]:
     if not text:
         return None
     match = re.search(r"\$\s*[\d.,]+", text)
-    return match.group(0) if match else _clean_text(text)
+    return match.group(0) if match else clean_text(text)
 
 
 def _cell_visible_text(td: Optional[Tag]) -> Optional[str]:
@@ -55,45 +52,15 @@ def _cell_visible_text(td: Optional[Tag]) -> Optional[str]:
     for tag in clone.find_all("p"):
         tag.decompose()
 
-    text = _clean_text(clone.get_text(" ", strip=True))
+    text = clean_text(clone.get_text(" ", strip=True))
     return text if text else None
-
-
-def _extract_label_strong_pairs(container) -> Dict[str, Optional[str]]:
-    data: Dict[str, Optional[str]] = {}
-    if container is None:
-        return data
-
-    for lab in container.find_all("label"):
-        key = _clean_text(lab.get_text(" ", strip=True)).replace(":", "").upper()
-        if not key:
-            continue
-
-        value = None
-        parent = lab.parent
-        if parent:
-            strong = parent.find("strong")
-            if strong:
-                value = _clean_text(strong.get_text(" ", strip=True))
-            else:
-                sib = parent.find_next_sibling()
-                if sib:
-                    strong = sib.find("strong")
-                    value = _clean_text((strong or sib).get_text(" ", strip=True))
-
-        if not value:
-            nxt = lab.find_next("strong")
-            if nxt:
-                value = _clean_text(nxt.get_text(" ", strip=True))
-
-        data[key] = value if value else None
-
-    return data
 
 
 def _parse_resumen(soup: BeautifulSoup, identificador: str, modo: str) -> ResumenSimit:
     resumen_div = soup.find(id="resumenEstadoCuenta")
-    pairs = _extract_label_strong_pairs(resumen_div) if resumen_div else {}
+    pairs = (
+        extract_label_with_strong_value_pairs(resumen_div) if resumen_div else {}
+    )
 
     comparendos = _parse_int(pairs.get("COMPARENDOS"))
     multas = _parse_int(pairs.get("MULTAS"))
@@ -106,7 +73,7 @@ def _parse_resumen(soup: BeautifulSoup, identificador: str, modo: str) -> Resume
         r"No tienes comparendos|no posee a la fecha pendientes",
         re.I,
     )):
-        candidato = _clean_text(str(text_node))
+        candidato = clean_text(str(text_node))
         if len(candidato) > 20 and not _MENSAJES_IGNORAR.search(candidato):
             mensaje = candidato
             break
@@ -145,11 +112,11 @@ def _parse_infraccion(tr) -> tuple[Optional[str], Optional[str]]:
         descripcion = popover.get("data-content", "").strip().strip('"')
         label = popover.find("label")
         if label:
-            codigo = _clean_text(label.get_text())
+            codigo = clean_text(label.get_text())
         if not codigo:
             span = popover.find("span")
             if span:
-                codigo = _clean_text(span.get_text())
+                codigo = clean_text(span.get_text())
 
     if not codigo:
         codigo = _cell_visible_text(inf_td)
@@ -163,7 +130,7 @@ def _parse_estado(tr) -> Optional[str]:
         return None
     for p in td.find_all("p"):
         p.decompose()
-    return _clean_text(td.get_text(" ", strip=True)) or None
+    return clean_text(td.get_text(" ", strip=True)) or None
 
 
 def _parse_comparendos_multas(soup: BeautifulSoup) -> List[ComparendoMulta]:
@@ -190,12 +157,12 @@ def _parse_comparendos_multas(soup: BeautifulSoup) -> List[ComparendoMulta]:
             if link:
                 span = link.find("span")
                 if span:
-                    numero = _clean_text(span.get_text())
+                    numero = clean_text(span.get_text())
             p_tag = tipo_cell.find("p")
             if p_tag:
-                tipo = _clean_text(p_tag.get_text())
+                tipo = clean_text(p_tag.get_text())
             for span in tipo_cell.find_all("span"):
-                txt = _clean_text(span.get_text())
+                txt = clean_text(span.get_text())
                 if "fecha imposición" in txt.lower():
                     fecha = re.sub(r"(?i)fecha imposición:\s*", "", txt).strip()
 
@@ -221,7 +188,7 @@ def _parse_comparendos_multas(soup: BeautifulSoup) -> List[ComparendoMulta]:
 
 def _extraer_total_desde_label(lab) -> Optional[TotalSeccion]:
     """Extrae total de un <label>: 'Total (N):' o 'Total acuerdos (N):'."""
-    txt = _clean_text(lab.get_text())
+    txt = clean_text(lab.get_text())
     match = re.search(r"Total(?:\s+acuerdos)?\s*\((\d+)\)\s*:", txt, re.I)
     if not match:
         return None
@@ -303,14 +270,14 @@ def _parse_acuerdos_pago(soup: BeautifulSoup) -> List[AcuerdoPago]:
                 return _extract_currency(raw)
             return raw
 
-        numero_raw = cell("Número acuerdo") or _clean_text(cells[0].get_text())
+        numero_raw = cell("Número acuerdo") or clean_text(cells[0].get_text())
         fecha = None
         numero = numero_raw
         if numero_raw and "\n" in numero_raw:
             parts = numero_raw.split("\n")
-            numero = _clean_text(parts[0])
+            numero = clean_text(parts[0])
             if len(parts) > 1:
-                fecha = _clean_text(parts[1])
+                fecha = clean_text(parts[1])
 
         result.append(AcuerdoPago(
             numero_acuerdo=numero,
@@ -361,6 +328,6 @@ def parse_simit_html(
         sin_registro=sin_registro,
         error=None,
         datos_raw={
-            "resumen_pairs": _extract_label_strong_pairs(soup.find(id="resumenEstadoCuenta")),
+            "resumen_pairs": extract_label_with_strong_value_pairs(soup.find(id="resumenEstadoCuenta")),
         },
     )

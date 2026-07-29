@@ -1,88 +1,14 @@
 # services/runt_parser.py
+from typing import Any, Dict, List, Optional
+
 from bs4 import BeautifulSoup
-from typing import Dict, List, Optional, Any
 
-
-# -----------------------------
-# Helpers: normalización
-# -----------------------------
-def _clean_text(s: str) -> str:
-    return " ".join((s or "").split()).strip()
-
-
-def _norm_key(s: str) -> str:
-    # Clave tipo: "NRO. DOCUMENTO:" -> "NRO. DOCUMENTO"
-    return _clean_text(s).replace(":", "").upper()
-
-
-# -----------------------------
-# Helpers: extraer label -> value (layout RUNT: <label> ... <b>)
-# -----------------------------
-def _extract_label_b_pairs(container) -> Dict[str, Optional[str]]:
-    """
-    Extrae pares tipo:
-      <label>ALGO:</label>  (en un div)
-      <b>VALOR</b>          (en el div hermano)
-
-    Esto aplica para:
-    - Multas e infracciones (TIENE MULTAS..., NRO. PAZ Y SALVO)
-    - Validación (INDICADOR DE ESTADO CIUDADANO, FECHA DESBLOQUEO, etc.)
-    - Bloques superiores de info personal (según cómo venga el DOM)
-    """
-    data: Dict[str, Optional[str]] = {}
-    labels = container.find_all("label")
-    for lab in labels:
-        key = _norm_key(lab.get_text(" ", strip=True))
-        if not key:
-            continue
-
-        # 1) Caso típico: label dentro de un div "col-...", y el valor está en el siguiente div hermano
-        label_col = lab.find_parent("div")
-        value = None
-
-        if label_col:
-            sib = label_col.find_next_sibling("div")
-            if sib:
-                val_tag = sib.find(["b", "span"])
-                if val_tag:
-                    value = _clean_text(val_tag.get_text(" ", strip=True))
-                else:
-                    value = _clean_text(sib.get_text(" ", strip=True))
-
-        # 2) Fallback: buscar el siguiente <b> cercano después del label
-        if not value:
-            b = lab.find_next("b")
-            if b:
-                value = _clean_text(b.get_text(" ", strip=True))
-
-        data[key] = value if value else None
-
-    # Limpieza: si todo quedó None, devolver {}
-    if all(v is None for v in data.values()):
-        return {}
-    return data
-
-
-# -----------------------------
-# Helpers: cards (si alguna sección usa mat-card)
-# -----------------------------
-def _extract_label_strong_pairs(container) -> Dict[str, Optional[str]]:
-    """
-    Soporta layouts tipo:
-      <strong>LABEL:</strong> valor
-    """
-    data: Dict[str, Optional[str]] = {}
-    for tag in container.find_all(["p", "div"], recursive=True):
-        strong = tag.find("strong")
-        if not strong:
-            continue
-        label = _norm_key(strong.get_text(" ", strip=True))
-        strong.extract()
-        value_text = _clean_text(tag.get_text(" ", strip=True))
-        data[label] = value_text if value_text else None
-    if all(v is None for v in data.values()):
-        return {}
-    return data
+from services.parse_helpers import (
+    clean_text,
+    extract_label_b_pairs,
+    extract_strong_as_label_pairs,
+    norm_key,
+)
 
 
 def _parse_cards_as_list(body) -> List[Dict[str, Optional[str]]]:
@@ -90,7 +16,9 @@ def _parse_cards_as_list(body) -> List[Dict[str, Optional[str]]]:
     cards = body.select("mat-card, .card")
     for card in cards:
         content = card.find("mat-card-content") or card
-        card_data = _extract_label_strong_pairs(content) or _extract_label_b_pairs(content)
+        card_data = extract_strong_as_label_pairs(content) or extract_label_b_pairs(
+            content
+        )
         if card_data:
             records.append(card_data)
     return records
@@ -109,7 +37,7 @@ def _parse_mat_table(table) -> Optional[List[Dict[str, Optional[str]]]]:
     Devuelve lista de dicts por fila. Si no hay filas, devuelve None.
     """
     # Headers: usa th del thead o el primer header-row
-    headers = [ _norm_key(th.get_text(" ", strip=True)) for th in table.find_all("th") ]
+    headers = [norm_key(th.get_text(" ", strip=True)) for th in table.find_all("th")]
     headers = [h for h in headers if h]  # filtra vacíos
 
     tbody = table.find("tbody")
@@ -125,7 +53,7 @@ def _parse_mat_table(table) -> Optional[List[Dict[str, Optional[str]]]]:
         tds = tr.find_all("td")
         if not tds:
             continue
-        cells = [_clean_text(td.get_text(" ", strip=True)) for td in tds]
+        cells = [clean_text(td.get_text(" ", strip=True)) for td in tds]
 
         # Mapea por headers si coinciden; si no, usa COL_1, COL_2...
         if headers and len(headers) >= 1:
@@ -161,7 +89,7 @@ def parse_runt_html(raw_html: str) -> Dict[str, Any]:
 
     # --- 1) Datos personales (robusto)
     # En RUNT aparecen como <label> ... y el valor al lado en <b>
-    personal_data = _extract_label_b_pairs(soup)
+    personal_data = extract_label_b_pairs(soup)
 
     # Claves que esperas (pueden variar, así que guardamos por si vienen diferente)
     nombre = personal_data.get("NOMBRE COMPLETO") or personal_data.get("NOMBRE")
@@ -174,7 +102,7 @@ def parse_runt_html(raw_html: str) -> Dict[str, Any]:
     tipo_doc = None
     num_doc = None
     if documento_raw:
-        partes = _clean_text(documento_raw).split()
+        partes = clean_text(documento_raw).split()
         if len(partes) >= 2:
             tipo_doc = partes[0].replace(".", "")
             num_doc = partes[-1]
@@ -186,7 +114,7 @@ def parse_runt_html(raw_html: str) -> Dict[str, Any]:
         title_el = panel.find("span", class_="panel-title-text")
         if not title_el:
             continue
-        titulo = _norm_key(title_el.get_text(" ", strip=True))
+        titulo = norm_key(title_el.get_text(" ", strip=True))
 
         body = panel.find("div", class_="mat-expansion-panel-body")
         if not body:
@@ -200,7 +128,7 @@ def parse_runt_html(raw_html: str) -> Dict[str, Any]:
             continue
 
         # 2.2) Si no hay filas, pero es sección tipo form/labels: parsear label/b (PRIORIDAD 2)
-        lb = _extract_label_b_pairs(body)
+        lb = extract_label_b_pairs(body)
         if lb:
             secciones[titulo] = lb
             continue
@@ -212,13 +140,13 @@ def parse_runt_html(raw_html: str) -> Dict[str, Any]:
             continue
 
         # 2.4) Strong pairs (PRIORIDAD 4)
-        strong_pairs = _extract_label_strong_pairs(body)
+        strong_pairs = extract_strong_as_label_pairs(body)
         if strong_pairs:
             secciones[titulo] = strong_pairs
             continue
 
         # 2.5) Fallback texto
-        texto = _clean_text(body.get_text(" ", strip=True))
+        texto = clean_text(body.get_text(" ", strip=True))
         if texto:
             # Limpieza ligera: si solo quedan headers sin datos, puede parecer “contenido”
             # pero no lo matamos aquí porque a veces es lo único disponible.

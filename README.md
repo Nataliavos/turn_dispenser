@@ -138,10 +138,10 @@ cp .env.example .env
 - Manejo unificado de errores por fuente RUNT/SIMIT (B-04)
 - Modelos de dominio tipados / versionados (C-01)
 - Fixtures HTML + tests offline de parsers (C-02)
+- Helpers compartidos parsers/Playwright (C-03)
 
 ### Pendiente (alineado al PRD)
 
-- Helpers compartidos parsers/Playwright (C-03)
 - Persistencia con **Supabase + Docker** (Fase D)
 - Piloto operativo / runbook (Fase E)
 - Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
@@ -155,7 +155,7 @@ turn_dispenser/
 ├── app.py / app_gui.py
 ├── config/          # settings desde entorno + defaults
 ├── controllers/     # orquestación (ConsultaController, Runt, Simit)
-├── services/        # Playwright + parsers
+├── services/        # Playwright + parsers + helpers compartidos
 ├── models/          # dataclasses de resultados
 ├── views/           # GUI y consola
 ├── utils/           # validación de placa, etc.

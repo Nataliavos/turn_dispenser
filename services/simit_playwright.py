@@ -5,22 +5,10 @@ import re
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
 from config.settings import get_settings
+from services.playwright_helpers import pick_first_working_locator
 from utils.logging_setup import get_logger
 
 logger = get_logger(__name__)
-
-
-def pick_first_working_locator(page, locator_candidates, description="elemento"):
-    for css_or_getter in locator_candidates:
-        try:
-            loc = css_or_getter(page) if callable(css_or_getter) else page.locator(css_or_getter)
-            loc.wait_for(state="visible", timeout=5000)
-            return loc
-        except PWTimeoutError:
-            continue
-        except Exception:
-            continue
-    raise RuntimeError(f"No se encontró {description}. Ajusta los selectores según el HTML real.")
 
 
 def dismiss_promo_modal(page, debug: bool = True) -> None:
