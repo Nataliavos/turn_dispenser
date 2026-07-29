@@ -2,11 +2,14 @@
 
 import argparse
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from config.settings import get_settings
-from models.runt_models import ConsultaRuntParams
+from controllers.persistencia_post_consulta import intentar_persistir_resultado
 from controllers.runt_controller import RuntController
+from models.consulta_models import ResultadoConsulta
+from models.runt_models import ConsultaRuntParams
 from utils.documento_validator import TIPOS_SOPORTADOS, validar_documento
 from utils.logging_setup import (
     get_correlation_id,
@@ -15,6 +18,7 @@ from utils.logging_setup import (
     set_correlation_id,
     setup_logging,
 )
+from views.resultado_formatter import formatear_resultado_consulta
 
 logger = get_logger(__name__)
 
@@ -58,7 +62,8 @@ def main() -> None:
         print(f"Error de validación:\n{msg}", file=sys.stderr)
         raise SystemExit(2)
 
-    set_correlation_id(new_correlation_id())
+    cid = new_correlation_id()
+    set_correlation_id(cid)
     logger.info(
         "CLI RUNT tipo=%s numero=%s cid=%s",
         tipo_norm,
@@ -73,24 +78,30 @@ def main() -> None:
         numero_documento=numero_norm,
     )
 
-    resultado = controller.consultar_ciudadano(
+    inicio = datetime.now(timezone.utc)
+    runt = controller.consultar_ciudadano(
         params=params,
         resolver_captcha=resolver_captcha_consola,
         debug=args.debug,
     )
 
-    # Salida orientada al operador (stdout).
-    if resultado.error:
-        print(f"❌ Error RUNT: {resultado.error}")
-        raise SystemExit(1)
-
-    print("✅ Consulta completada:")
-    print(f"Sin registro: {resultado.sin_registro}")
-    print(f"Nombre: {resultado.nombre}")
-    print(f"Estado conductor: {resultado.estado_licencia}")
-    print(
-        "Multas inferidas (heurística, no elegibilidad): "
-        f"{resultado.tiene_multas_inferidas}"
+    # Empaqueta hechos RUNT para persistencia (CLI aún no unifica SIMIT).
+    agregado = ResultadoConsulta(
+        modo="DOCUMENTO",
+        identificador=numero_norm,
+        tipo_documento=tipo_norm,
+        correlation_id=cid,
+        iniciado_en=inicio,
+        resultado_runt=runt,
+        error_runt=runt.error,
     )
-    print(f"schema_version: {resultado.schema_version}")
-    print("Secciones:", list((resultado.secciones or {}).keys()))
+    agregado.finalizar()
+    intentar_persistir_resultado(agregado)
+
+    # Salida orientada al operador (stdout).
+    formatear_resultado_consulta(agregado, print)
+    if agregado.error_persistencia:
+        print(f"⚠️ {agregado.error_persistencia}", file=sys.stderr)
+
+    if runt.error:
+        raise SystemExit(1)

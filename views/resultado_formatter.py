@@ -32,6 +32,7 @@ def resumen_estados_consulta(resultado: ResultadoConsulta) -> str:
 def formatear_resultado_consulta(resultado: ResultadoConsulta, emit: EmitFn) -> None:
     """Presenta errores y datos por fuente con la misma semántica."""
     _formatear_metadatos_consulta(resultado, emit)
+    _formatear_persistencia(resultado, emit)
 
     if resultado.error_runt:
         emit(f"❌ Error RUNT: {resultado.error_runt}")
@@ -57,6 +58,19 @@ def _formatear_metadatos_consulta(resultado: ResultadoConsulta, emit: EmitFn) ->
         partes.append(f"fin={resultado.finalizado_en.isoformat()}")
     if partes:
         emit("Consulta: " + " | ".join(partes))
+
+
+def _formatear_persistencia(resultado: ResultadoConsulta, emit: EmitFn) -> None:
+    """Aviso de guardado en BD (D-03). No mezcla con estados de fuente."""
+    if resultado.persistencia_omitida:
+        emit("Persistencia: omitida (PERSISTENCIA_ENABLED=false).")
+        return
+    if resultado.persistido is True:
+        emit(f"Persistencia: guardada (id={resultado.consulta_db_id}).")
+        return
+    if resultado.error_persistencia:
+        emit(f"⚠️ Persistencia: no se guardó. {resultado.error_persistencia}")
+        return
 
 
 def formatear_resultado_runt(resultado: ResultadoRunt, emit: EmitFn) -> None:

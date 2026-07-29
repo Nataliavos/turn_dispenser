@@ -119,9 +119,9 @@ cp .env.example .env
 - `.env` / `.env.local` están ignorados por git
 - Por defecto `BROWSER_HEADLESS=false` (CAPTCHA RUNT manual)
 - `LOG_LEVEL` / `LOG_FILE` opcionales (sin archivo por defecto; solo stderr)
-- Variables `SUPABASE_*` / `DATABASE_URL` / `DB_CONNECT_TIMEOUT_S`: usadas por `repositories/` (D-02); orquestación aún no persiste sola (D-03)
-- Guía de repositorios: [`docs/persistencia.md`](docs/persistencia.md)
-- Smoke insert+select: `python scripts/smoke_persistencia.py`
+- Variables `SUPABASE_*` / `DATABASE_URL` / `DB_CONNECT_TIMEOUT_S` / `PERSISTENCIA_ENABLED`
+- Guía: [`docs/persistencia.md`](docs/persistencia.md)
+- Smoke: `python scripts/smoke_persistencia.py`
 
 ---
 
@@ -161,10 +161,11 @@ supabase db reset   # aplica supabase/migrations + seed
 - Helpers compartidos parsers/Playwright (C-03)
 - Esquema BD + Supabase local Docker (D-01)
 - Capa de conexión y repositorios Postgres/Supabase (D-02)
+- Persistencia automática post-consulta en GUI/CLI (D-03)
 
 ### Pendiente (alineado al PRD)
 
-- Integrar persistencia post-consulta + verificación E2E (D-03 … D-04)
+- Verificación E2E de persistencia (D-04)
 - Piloto operativo / runbook (Fase E)
 - Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
 
