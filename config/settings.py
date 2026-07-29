@@ -81,8 +81,9 @@ class Settings:
     simit_results_timeout_ms: int
     runt_captcha_timeout_ms: int
 
-    # Preparados para Fase D (persistencia). No se usan aún.
+    # Persistencia (D-01/D-02): Postgres del stack Supabase local.
     database_url: Optional[str]
+    db_connect_timeout_s: int
     supabase_url: Optional[str]
     supabase_anon_key: Optional[str]
     supabase_service_role_key: Optional[str]
@@ -119,6 +120,7 @@ def get_settings() -> Settings:
         simit_results_timeout_ms=_env_int("SIMIT_RESULTS_TIMEOUT_MS", 30_000),
         runt_captcha_timeout_ms=_env_int("RUNT_CAPTCHA_TIMEOUT_MS", 45_000),
         database_url=_env_optional_str("DATABASE_URL"),
+        db_connect_timeout_s=_env_int("DB_CONNECT_TIMEOUT_S", 10),
         supabase_url=_env_optional_str("SUPABASE_URL"),
         supabase_anon_key=_env_optional_str("SUPABASE_ANON_KEY"),
         supabase_service_role_key=_env_optional_str("SUPABASE_SERVICE_ROLE_KEY"),

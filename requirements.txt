@@ -4,3 +4,4 @@ PyQt6>=6.6.0
 beautifulsoup4==4.14.2
 playwright==1.55.0
 python-dotenv>=1.0.0
+psycopg[binary]>=3.2.0

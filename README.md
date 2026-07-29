@@ -39,7 +39,7 @@ En modo placa, el portal público RUNT no aplica; solo SIMIT.
 - BeautifulSoup4 — parseo HTML
 - PyQt6 — interfaz gráfica
 - python-dotenv — configuración externa (`.env`)
-- Persistencia: **Supabase local con Docker** (PostgreSQL del stack). Esquema y arranque en D-01; repositorios en D-02.
+- Persistencia: **Supabase local con Docker** + capa `repositories/` (psycopg). Integración en orquestación: D-03.
 
 Dependencias de runtime: ver [`requirements.txt`](requirements.txt) (solo paquetes directos).
 
@@ -119,7 +119,9 @@ cp .env.example .env
 - `.env` / `.env.local` están ignorados por git
 - Por defecto `BROWSER_HEADLESS=false` (CAPTCHA RUNT manual)
 - `LOG_LEVEL` / `LOG_FILE` opcionales (sin archivo por defecto; solo stderr)
-- Variables `SUPABASE_*` / `DATABASE_URL`: entorno local D-01 listo; la app aún no escribe en BD (D-02/D-03)
+- Variables `SUPABASE_*` / `DATABASE_URL` / `DB_CONNECT_TIMEOUT_S`: usadas por `repositories/` (D-02); orquestación aún no persiste sola (D-03)
+- Guía de repositorios: [`docs/persistencia.md`](docs/persistencia.md)
+- Smoke insert+select: `python scripts/smoke_persistencia.py`
 
 ---
 
@@ -158,10 +160,11 @@ supabase db reset   # aplica supabase/migrations + seed
 - Fixtures HTML + tests offline de parsers (C-02)
 - Helpers compartidos parsers/Playwright (C-03)
 - Esquema BD + Supabase local Docker (D-01)
+- Capa de conexión y repositorios Postgres/Supabase (D-02)
 
 ### Pendiente (alineado al PRD)
 
-- Capa de conexión / repositorios e integración post-consulta (D-02 … D-04)
+- Integrar persistencia post-consulta + verificación E2E (D-03 … D-04)
 - Piloto operativo / runbook (Fase E)
 - Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
 
@@ -181,9 +184,11 @@ turn_dispenser/
 ├── docs/
 │   ├── product-requirements-document.md   # PRD oficial
 │   ├── db-schema.md                       # esquema de persistencia
-│   └── supabase-local.md                  # arranque Supabase + Docker
+│   ├── supabase-local.md                  # arranque Supabase + Docker
+│   └── persistencia.md                    # repositorios / DATABASE_URL
+├── repositories/    # conexión psycopg + ConsultaRepository (D-02)
 ├── supabase/        # config CLI, migrations/, seed.sql
-├── scripts/         # apply_local_migrations.sh (workaround NTFS)
+├── scripts/         # apply_local_migrations.sh, smoke_persistencia.py
 ├── .env.example
 ├── requirements.txt
 ├── requirements-dev.txt

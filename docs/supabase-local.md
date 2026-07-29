@@ -115,7 +115,7 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
 
 Plantilla: `.env.example`.  
-La app **aún no persiste** en runtime (D-02/D-03); estas vars quedan listas para la capa de repositorios.
+`DATABASE_URL` la usa la capa `repositories/` (D-02, `psycopg`). El cableado en `ConsultaController` llega en D-03.
 
 ---
 
@@ -137,3 +137,9 @@ Sí se versionan: `config.toml`, `migrations/*.sql`, `seed.sql`.
 2. `\dt public.*` muestra `consultas`, `resultados_runt`, `resultados_simit`, `eventos_consulta`.
 3. Documentación de esquema en [`db-schema.md`](db-schema.md).
 4. Sin columnas de elegibilidad.
+
+---
+
+## Probar repositorios (D-02)
+
+Ver [`persistencia.md`](persistencia.md): `python scripts/smoke_persistencia.py`.
