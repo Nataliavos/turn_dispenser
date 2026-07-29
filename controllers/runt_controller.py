@@ -2,7 +2,11 @@ from typing import Callable, Optional
 
 from config.settings import get_settings
 from models.exceptions import FUENTE_RUNT, mensaje_accionable_fuente
-from models.runt_models import ConsultaRuntParams, ResultadoRunt
+from models.runt_models import (
+    ConsultaRuntParams,
+    ResultadoRunt,
+    inferir_multas_desde_secciones,
+)
 from services.runt_playwright import run_runt_flow
 from services.runt_parser import parse_runt_html
 from utils.logging_setup import ensure_correlation_id, get_logger
@@ -59,26 +63,7 @@ class RuntController:
 
             parsed = parse_runt_html(html)
             secciones = parsed.get("secciones", {}) or {}
-
-            posibles_multas_keys = [
-                "MULTAS E INFRACCIONES",
-                "MULTAS",
-                "INFRACCIONES",
-            ]
-            multas_data = None
-            for k in posibles_multas_keys:
-                if k in secciones:
-                    multas_data = secciones.get(k)
-                    break
-
-            if multas_data is None:
-                tiene_multas = False
-            elif isinstance(multas_data, list):
-                tiene_multas = len(multas_data) > 0
-            elif isinstance(multas_data, dict):
-                tiene_multas = len(multas_data) > 0
-            else:
-                tiene_multas = bool(str(multas_data).strip())
+            tiene_multas_inferidas = inferir_multas_desde_secciones(secciones)
 
             logger.info(
                 "Consulta RUNT OK nombre=%s secciones=%s",
@@ -88,7 +73,13 @@ class RuntController:
             return ResultadoRunt(
                 nombre=parsed.get("nombre_completo"),
                 estado_licencia=parsed.get("estado_conductor"),
-                tiene_multas=tiene_multas,
+                tipo_documento=parsed.get("tipo_documento") or params.tipo_documento,
+                numero_documento=parsed.get("numero_documento")
+                or params.numero_documento,
+                estado_persona=parsed.get("estado_persona"),
+                numero_inscripcion=parsed.get("numero_inscripcion"),
+                fecha_inscripcion=parsed.get("fecha_inscripcion"),
+                tiene_multas_inferidas=tiene_multas_inferidas,
                 secciones=secciones,
                 raw_html=html,
                 sin_registro=False,

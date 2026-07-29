@@ -88,5 +88,9 @@ def main() -> None:
     print(f"Sin registro: {resultado.sin_registro}")
     print(f"Nombre: {resultado.nombre}")
     print(f"Estado conductor: {resultado.estado_licencia}")
-    print(f"Tiene multas: {resultado.tiene_multas}")
+    print(
+        "Multas inferidas (heurística, no elegibilidad): "
+        f"{resultado.tiene_multas_inferidas}"
+    )
+    print(f"schema_version: {resultado.schema_version}")
     print("Secciones:", list((resultado.secciones or {}).keys()))

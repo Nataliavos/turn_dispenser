@@ -1,5 +1,16 @@
+"""
+Modelos de dominio SIMIT (contrato versionado).
+
+``schema_version`` alinea el payload tipado con evolución de parsers y
+persistencia futura (ticket C-01 / RF-16).
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+SCHEMA_VERSION_SIMIT = "1"
 
 
 @dataclass
@@ -57,6 +68,9 @@ class TotalSeccion:
 
 @dataclass
 class ResultadoSimit:
+    """Resultado estructurado de una consulta a SIMIT."""
+
+    schema_version: str = SCHEMA_VERSION_SIMIT
     resumen: Optional[ResumenSimit] = None
     comparendos_multas: List[ComparendoMulta] = field(default_factory=list)
     acuerdos_pago: List[AcuerdoPago] = field(default_factory=list)
