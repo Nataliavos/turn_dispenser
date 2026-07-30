@@ -12,6 +12,7 @@ from models.runt_models import ResultadoRunt
 from models.simit_models import ResultadoSimit, ResumenSimit
 from views.resultado_formatter import (
     formatear_resultado_consulta,
+    mensajes_recuperacion,
     resumen_estados_consulta,
 )
 
@@ -24,6 +25,13 @@ class MensajeAccionableTests(unittest.TestCase):
         msg = mensaje_accionable_fuente(FUENTE_SIMIT, TimeoutErrorFake("timeout waiting"))
         self.assertIn("SIMIT", msg)
         self.assertIn("tiempo de espera", msg.lower())
+        self.assertIn("Acción:", msg)
+
+    def test_red(self) -> None:
+        msg = mensaje_accionable_fuente(FUENTE_RUNT, ConnectionError("network down"))
+        self.assertIn("RUNT", msg)
+        self.assertIn("red", msg.lower())
+        self.assertIn("reintent", msg.lower())
 
 
 class ResultadoConsultaEstadoTests(unittest.TestCase):
@@ -114,11 +122,71 @@ class FormatterSimetriaTests(unittest.TestCase):
                 identificador="1",
                 error_runt="RUNT: fallo",
                 error_simit="SIMIT: fallo",
+                estado_global="error",
             ),
             lineas.append,
         )
         self.assertTrue(any("Error RUNT" in x for x in lineas))
         self.assertTrue(any("Error SIMIT" in x for x in lineas))
+        self.assertTrue(any("Reintentar consulta" in x for x in lineas))
+
+
+class RecuperacionUxTests(unittest.TestCase):
+    def test_parcial_menciona_fuente_y_reintento(self) -> None:
+        r = ResultadoConsulta(
+            modo="DOCUMENTO",
+            identificador="1",
+            resultado_runt=ResultadoRunt(nombre="Ana"),
+            error_simit="SIMIT: fallo de red. Acción: reintenta.",
+            resultado_simit=ResultadoSimit(error="SIMIT: fallo"),
+            estado_global="parcial",
+        )
+        msgs = mensajes_recuperacion(r)
+        self.assertTrue(msgs)
+        unidos = " ".join(msgs)
+        self.assertIn("SIMIT", unidos)
+        self.assertIn("Reintentar consulta", unidos)
+        self.assertIn("parcial", unidos.lower())
+
+    def test_ok_sin_sugerencias(self) -> None:
+        r = ResultadoConsulta(
+            modo="PLACA",
+            identificador="ABC123",
+            resultado_simit=ResultadoSimit(
+                resumen=ResumenSimit(
+                    identificador="ABC123",
+                    modo="PLACA",
+                    sin_pendientes=True,
+                ),
+            ),
+            estado_global="ok",
+        )
+        self.assertEqual(mensajes_recuperacion(r), [])
+
+
+class ProgresoCallbackTests(unittest.TestCase):
+    def test_emite_progreso_por_fuente(self) -> None:
+        ctrl = ConsultaController()
+        ctrl._runt = MagicMock()
+        ctrl._simit = MagicMock()
+        ctrl._runt.consultar_ciudadano.return_value = ResultadoRunt(nombre="Ana")
+        ctrl._simit.consultar.return_value = ResultadoSimit(
+            resumen=ResumenSimit(
+                identificador="1017",
+                modo="DOCUMENTO",
+                sin_pendientes=True,
+            ),
+        )
+        eventos: list[tuple[str, str]] = []
+        ctrl.consultar(
+            ConsultaParams(modo="DOCUMENTO", identificador="1017", tipo_documento="CC"),
+            debug=False,
+            on_progreso=lambda f, e: eventos.append((f, e)),
+        )
+        fuentes = {f for f, _ in eventos}
+        self.assertIn("RUNT", fuentes)
+        self.assertIn("SIMIT", fuentes)
+        self.assertTrue(any(e == "en_curso" for _, e in eventos))
 
 
 if __name__ == "__main__":
