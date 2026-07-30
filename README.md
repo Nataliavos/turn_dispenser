@@ -87,7 +87,8 @@ Antes de lanzar automatización, la app valida formato básico:
 - **Documento:** tipo soportado (`CC`, `CE`, `TI`, `RC`, `PPT`, `CD`, `PA`) + número con longitud/caracteres razonables (`utils/documento_validator.py`).
 - **Placa:** formatos colombianos conocidos (`utils/placa_validator.py`).
 
-Validación manual histórica (no sustituye tests automatizados): [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md).
+Pruebas integrales (E-02): [`docs/PRUEBAS_INTEGRALES.md`](docs/PRUEBAS_INTEGRALES.md) · `python scripts/verificar_flujo_integral.py`.  
+Histórico Fase 1: [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md).
 
 ---
 
@@ -123,6 +124,7 @@ cp .env.example .env
 - Guía: [`docs/persistencia.md`](docs/persistencia.md)
 - Smoke: `python scripts/smoke_persistencia.py`
 - E2E persistencia: `python scripts/verificar_persistencia_e2e.py` · [`docs/VALIDACION_PERSISTENCIA.md`](docs/VALIDACION_PERSISTENCIA.md)
+- Flujo integral: `python scripts/verificar_flujo_integral.py` · [`docs/PRUEBAS_INTEGRALES.md`](docs/PRUEBAS_INTEGRALES.md)
 
 ---
 
@@ -189,6 +191,7 @@ turn_dispenser/
 │   ├── supabase-local.md                  # arranque Supabase + Docker
 │   ├── persistencia.md                    # repositorios / DATABASE_URL
 │   └── VALIDACION_PERSISTENCIA.md         # checklist E2E (D-04)
+│   └── PRUEBAS_INTEGRALES.md              # acta flujo completo (E-02)
 ├── repositories/    # conexión psycopg + ConsultaRepository (D-02)
 ├── supabase/        # config CLI, migrations/, seed.sql
 ├── scripts/         # migraciones locales, smoke y verificación E2E

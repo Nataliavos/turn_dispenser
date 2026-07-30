@@ -1,5 +1,10 @@
 # Plan de pruebas — Fase 1
 
+> **Supersedido (E-02):** usar [`docs/PRUEBAS_INTEGRALES.md`](docs/PRUEBAS_INTEGRALES.md)
+> como checklist operativo (config, logs, Supabase Docker, reintentos E-01).
+> Este documento se conserva como histórico de Fase 1; varios comandos
+> (`_consultar_paralelo`, CLI `--modo`) ya no reflejan el código actual.
+
 Batería de pruebas para validar la Fase 1 (orquestación paralela, consola unificada, feedback GUI) y detectar regresiones respecto al comportamiento previo.
 
 **Cuándo ejecutar:** antes de abrir PR de Fase 1, antes de iniciar Fase 2, y tras cualquier cambio en `consulta_controller`, `console_view`, `gui_qt` o `resultado_formatter`.
