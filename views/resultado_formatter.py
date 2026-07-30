@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Any, Callable, List
 
 from models.consulta_models import ResultadoConsulta
 from models.runt_models import ResultadoRunt
@@ -12,6 +12,7 @@ _ETIQUETAS_ESTADO = {
     "sin_registro": "sin registro",
     "sin_pendientes": "sin pendientes",
     "omitido": "—",
+    "en_curso": "en curso…",
 }
 
 
@@ -29,6 +30,44 @@ def resumen_estados_consulta(resultado: ResultadoConsulta) -> str:
     )
 
 
+def mensajes_recuperacion(resultado: ResultadoConsulta) -> List[str]:
+    """
+    Sugerencias de recuperación para el operador tras error o parcial (E-01 / RF-20).
+
+    El reintento es siempre de la consulta completa: reintentar solo RUNT o solo
+    SIMIT no está disponible porque RUNT exige CAPTCHA manual en el hilo de Qt
+    y la orquestación actual lanza ambas fuentes juntas.
+    """
+    lineas: List[str] = []
+    estado = resultado.estado_global or resultado.calcular_estado_global()
+    if estado not in ("error", "parcial"):
+        return lineas
+
+    fuentes_fallidas: List[str] = []
+    if resultado.estado_fuente_runt() == "error":
+        fuentes_fallidas.append("RUNT")
+    if resultado.estado_fuente_simit() == "error":
+        fuentes_fallidas.append("SIMIT")
+
+    if fuentes_fallidas:
+        afectadas = " y ".join(fuentes_fallidas)
+        lineas.append(
+            f"Recuperación: falló {afectadas}. "
+            "Use «Reintentar consulta» para repetir el flujo completo "
+            "(no hace falta cerrar la aplicación)."
+        )
+    if "RUNT" in fuentes_fallidas:
+        lineas.append(
+            "Nota RUNT: el CAPTCHA se resolverá de nuevo de forma manual."
+        )
+    if estado == "parcial":
+        lineas.append(
+            "Resultado parcial: la fuente exitosa ya se muestra arriba; "
+            "el reintento vuelve a consultar ambas fuentes."
+        )
+    return lineas
+
+
 def formatear_resultado_consulta(resultado: ResultadoConsulta, emit: EmitFn) -> None:
     """Presenta errores y datos por fuente con la misma semántica."""
     _formatear_metadatos_consulta(resultado, emit)
@@ -44,6 +83,8 @@ def formatear_resultado_consulta(resultado: ResultadoConsulta, emit: EmitFn) -> 
     elif resultado.resultado_simit is not None:
         formatear_resultado_simit(resultado.resultado_simit, emit)
 
+    for linea in mensajes_recuperacion(resultado):
+        emit(f"💡 {linea}")
 
 def _formatear_metadatos_consulta(resultado: ResultadoConsulta, emit: EmitFn) -> None:
     """Cabecera ligera de trazabilidad (no afecta semántica de fuentes)."""

@@ -5,9 +5,15 @@ Vista gráfica (GUI) para consulta RUNT + SIMIT usando PyQt6 + QThread.
 - Modo DOCUMENTO: consulta paralela RUNT + SIMIT.
 - Modo PLACA: consulta solo SIMIT.
 - CAPTCHA RUNT resuelto manualmente vía diálogo.
+- Reintento de consulta completa tras error/parcial (E-01).
+
+Limitación (E-01): no hay reintento por fuente individual. RUNT exige CAPTCHA
+manual en el flujo Qt y la orquestación lanza RUNT+SIMIT juntos; mezclar
+resultados parciales sería frágil. El operador usa «Reintentar consulta».
 """
 
 import sys
+from typing import Optional
 
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -36,7 +42,9 @@ from models.consulta_models import ConsultaParams
 from utils.documento_validator import validar_documento
 from utils.placa_validator import es_placa_valida, normalizar_placa, MENSAJE_PLACA_INVALIDA
 from views.resultado_formatter import (
+    etiqueta_estado,
     formatear_resultado_consulta,
+    mensajes_recuperacion,
     resumen_estados_consulta,
 )
 
@@ -83,6 +91,7 @@ class ConsultaWorker(QObject):
     finished = pyqtSignal(object)
     error = pyqtSignal(str)
     log = pyqtSignal(str)
+    progreso = pyqtSignal(str, str)  # fuente, estado
     captchaRequested = pyqtSignal(bytes)
     _captchaResolved = pyqtSignal(str)
 
@@ -112,11 +121,15 @@ class ConsultaWorker(QObject):
                 params=self.params,
                 resolver_captcha=self._resolver_captcha_desde_worker,
                 debug=self.debug,
+                on_progreso=self._emitir_progreso,
             )
             self.finished.emit(resultado)
 
         except Exception as e:
             self.error.emit(str(e))
+
+    def _emitir_progreso(self, fuente: str, estado: str) -> None:
+        self.progreso.emit(fuente, estado)
 
     def _resolver_captcha_desde_worker(self, image_bytes: bytes) -> str:
         self.captchaRequested.emit(image_bytes)
@@ -141,10 +154,11 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("Turn Dispenser — Consulta RUNT + SIMIT")
-        self.setMinimumSize(720, 480)
+        self.setMinimumSize(720, 520)
 
         self._thread: QThread | None = None
         self._worker: ConsultaWorker | None = None
+        self._ultimos_params: Optional[ConsultaParams] = None
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -215,10 +229,33 @@ class MainWindow(QMainWindow):
 
         self.rb_documento.toggled.connect(self._on_modo_changed)
 
-        # ---- Botón consulta ----
+        # ---- Botones consulta / reintento ----
+        fila_botones = QHBoxLayout()
         self.btn_consultar = QPushButton("Consultar")
         self.btn_consultar.clicked.connect(self.on_consultar_clicked)
-        main_layout.addWidget(self.btn_consultar)
+        fila_botones.addWidget(self.btn_consultar)
+
+        self.btn_reintentar = QPushButton("Reintentar consulta")
+        self.btn_reintentar.setEnabled(False)
+        self.btn_reintentar.setToolTip(
+            "Repite la última consulta completa (RUNT+SIMIT o solo SIMIT).\n"
+            "No hay reintento por fuente: RUNT requiere CAPTCHA manual en Qt "
+            "y ambas fuentes se lanzan juntas."
+        )
+        self.btn_reintentar.clicked.connect(self.on_reintentar_clicked)
+        fila_botones.addWidget(self.btn_reintentar)
+        fila_botones.addStretch()
+        main_layout.addLayout(fila_botones)
+
+        # ---- Progreso por fuente (RF-17) ----
+        fila_progreso = QHBoxLayout()
+        self.lbl_progreso_runt = QLabel("RUNT: —")
+        self.lbl_progreso_simit = QLabel("SIMIT: —")
+        fila_progreso.addWidget(self.lbl_progreso_runt)
+        fila_progreso.addSpacing(24)
+        fila_progreso.addWidget(self.lbl_progreso_simit)
+        fila_progreso.addStretch()
+        main_layout.addLayout(fila_progreso)
 
         # ---- Estado + log ----
         self.lbl_estado = QLabel("Listo para consultar.")
@@ -237,7 +274,40 @@ class MainWindow(QMainWindow):
     def log(self, mensaje: str):
         self.txt_log.append(f"➡ {mensaje}")
 
+    def _set_progreso_fuente(self, fuente: str, estado: str) -> None:
+        texto = f"{fuente}: {etiqueta_estado(estado)}"
+        if fuente.upper() == "RUNT":
+            self.lbl_progreso_runt.setText(texto)
+        elif fuente.upper() == "SIMIT":
+            self.lbl_progreso_simit.setText(texto)
+
+    def _set_controles_consulta_activos(self, activos: bool) -> None:
+        self.btn_consultar.setEnabled(activos)
+        self.btn_reintentar.setEnabled(activos and self._ultimos_params is not None)
+        self.rb_documento.setEnabled(activos)
+        self.rb_placa.setEnabled(activos)
+        self.cmb_tipo.setEnabled(activos)
+        self.txt_documento.setEnabled(activos)
+        self.txt_placa.setEnabled(activos)
+
     def on_consultar_clicked(self):
+        params = self._leer_params_desde_formulario()
+        if params is None:
+            return
+        self._iniciar_consulta(params)
+
+    def on_reintentar_clicked(self):
+        if self._ultimos_params is None:
+            QMessageBox.information(
+                self,
+                "Sin consulta previa",
+                "Aún no hay una consulta para reintentar. Use «Consultar» primero.",
+            )
+            return
+        self.log("— Reintento de consulta completa —")
+        self._iniciar_consulta(self._ultimos_params)
+
+    def _leer_params_desde_formulario(self) -> Optional[ConsultaParams]:
         if self.rb_documento.isChecked():
             modo = "DOCUMENTO"
             tipo_raw = self.cmb_tipo.currentData() or ""
@@ -245,31 +315,43 @@ class MainWindow(QMainWindow):
             ok, tipo_doc, identificador, msg = validar_documento(tipo_raw, numero_raw)
             if not ok:
                 QMessageBox.warning(self, "Documento inválido", msg)
-                return
+                return None
         else:
             modo = "PLACA"
             identificador = normalizar_placa(self.txt_placa.text())
             tipo_doc = None
             if not identificador:
-                QMessageBox.warning(self, "Dato requerido", "Debes ingresar la placa del vehículo.")
-                return
+                QMessageBox.warning(
+                    self, "Dato requerido", "Debes ingresar la placa del vehículo."
+                )
+                return None
             if not es_placa_valida(identificador):
                 QMessageBox.warning(self, "Placa inválida", MENSAJE_PLACA_INVALIDA)
-                return
+                return None
 
-        params = ConsultaParams(
+        return ConsultaParams(
             modo=modo,
             identificador=identificador,
             tipo_documento=tipo_doc,
         )
 
-        self.btn_consultar.setEnabled(False)
-        if modo == "DOCUMENTO":
+    def _iniciar_consulta(self, params: ConsultaParams) -> None:
+        self._ultimos_params = params
+        self._set_controles_consulta_activos(False)
+
+        if params.modo == "DOCUMENTO":
             self.lbl_estado.setText("Consultando en RUNT y SIMIT en paralelo…")
-            self.log(f"Iniciando consulta documento: tipo={tipo_doc}, número={identificador}")
+            self._set_progreso_fuente("RUNT", "en_curso")
+            self._set_progreso_fuente("SIMIT", "en_curso")
+            self.log(
+                f"Iniciando consulta documento: "
+                f"tipo={params.tipo_documento}, número={params.identificador}"
+            )
         else:
             self.lbl_estado.setText("Consultando en SIMIT por placa…")
-            self.log(f"Iniciando consulta placa: {identificador}")
+            self._set_progreso_fuente("RUNT", "omitido")
+            self._set_progreso_fuente("SIMIT", "en_curso")
+            self.log(f"Iniciando consulta placa: {params.identificador}")
 
         self._thread = QThread(self)
         self._worker = ConsultaWorker(params=params, debug=get_settings().debug)
@@ -279,6 +361,7 @@ class MainWindow(QMainWindow):
         self._worker.finished.connect(self._on_worker_finished)
         self._worker.error.connect(self._on_worker_error)
         self._worker.log.connect(self._on_worker_log)
+        self._worker.progreso.connect(self._on_worker_progreso)
         self._worker.captchaRequested.connect(self._on_captcha_requested)
 
         self._worker.finished.connect(self._thread.quit)
@@ -292,27 +375,57 @@ class MainWindow(QMainWindow):
     def _on_worker_log(self, msg: str):
         self.log(msg)
 
+    @pyqtSlot(str, str)
+    def _on_worker_progreso(self, fuente: str, estado: str):
+        self._set_progreso_fuente(fuente, estado)
+
     @pyqtSlot(object)
     def _on_worker_finished(self, resultado):
+        self._set_progreso_fuente("RUNT", resultado.estado_fuente_runt())
+        self._set_progreso_fuente("SIMIT", resultado.estado_fuente_simit())
         self.lbl_estado.setText(resumen_estados_consulta(resultado))
         self.log("✅ Consulta finalizada.")
         formatear_resultado_consulta(resultado, self.log)
+
         if resultado.error_persistencia:
             QMessageBox.warning(
                 self,
                 "No se guardó en la base de datos",
                 "La consulta se completó y los resultados se muestran aquí,\n"
                 "pero no se pudieron guardar en Supabase/Postgres.\n\n"
-                f"{resultado.error_persistencia}",
+                f"{resultado.error_persistencia}\n\n"
+                "Puede usar «Reintentar consulta» para intentar de nuevo.",
             )
-        self.btn_consultar.setEnabled(True)
+
+        recuperacion = mensajes_recuperacion(resultado)
+        if recuperacion:
+            QMessageBox.warning(
+                self,
+                "Consulta con fallos — puede reintentar",
+                "\n\n".join(recuperacion),
+            )
+
+        self._set_controles_consulta_activos(True)
 
     @pyqtSlot(str)
     def _on_worker_error(self, error_msg: str):
         self.lbl_estado.setText("Error durante la consulta.")
+        # Conservar último estado conocido; marcar como error genérico si seguía en curso
+        for lbl, fuente in (
+            (self.lbl_progreso_runt, "RUNT"),
+            (self.lbl_progreso_simit, "SIMIT"),
+        ):
+            if "en curso" in lbl.text().lower():
+                self._set_progreso_fuente(fuente, "error")
         self.log(f"Error: {error_msg}")
-        QMessageBox.critical(self, "Error en la consulta", f"Ocurrió un error:\n{error_msg}")
-        self.btn_consultar.setEnabled(True)
+        QMessageBox.critical(
+            self,
+            "Error en la consulta",
+            f"Ocurrió un error inesperado:\n{error_msg}\n\n"
+            "Acción: use «Reintentar consulta» sin cerrar la aplicación.\n"
+            "Si el fallo menciona RUNT o SIMIT, esa es la fuente afectada.",
+        )
+        self._set_controles_consulta_activos(True)
 
     @pyqtSlot(bytes)
     def _on_captcha_requested(self, image_bytes: bytes):
