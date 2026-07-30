@@ -5,6 +5,7 @@ Aplicación de escritorio en **Python** que automatiza consultas a plataformas o
 **Pregunta que responde hoy:** *¿Qué reportan RUNT y SIMIT?*  
 **No decide** si un ciudadano puede realizar un trámite (reglas de elegibilidad fuera de alcance).
 
+**Piloto / operación de estación:** [`docs/RUNBOOK_PILOTO.md`](docs/RUNBOOK_PILOTO.md)  
 **Fuente de verdad del producto:** [`docs/product-requirements-document.md`](docs/product-requirements-document.md)
 
 ---
@@ -88,6 +89,7 @@ Antes de lanzar automatización, la app valida formato básico:
 - **Placa:** formatos colombianos conocidos (`utils/placa_validator.py`).
 
 Pruebas integrales (E-02): [`docs/PRUEBAS_INTEGRALES.md`](docs/PRUEBAS_INTEGRALES.md) · `python scripts/verificar_flujo_integral.py`.  
+Runbook estación piloto (E-03): [`docs/RUNBOOK_PILOTO.md`](docs/RUNBOOK_PILOTO.md).  
 Histórico Fase 1: [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md).
 
 ---
@@ -166,10 +168,12 @@ supabase db reset   # aplica supabase/migrations + seed
 - Capa de conexión y repositorios Postgres/Supabase (D-02)
 - Persistencia automática post-consulta en GUI/CLI (D-03)
 - Verificación E2E de persistencia documentada (D-04)
+- Pruebas integrales del flujo (E-02)
+- Runbook y checklist de estación piloto (E-03)
 
 ### Pendiente (alineado al PRD)
 
-- Piloto operativo / runbook (Fase E)
+- Completar pasada manual con portales/CAPTCHA en cada estación (mitigación E-02, §2.6 del runbook)
 - Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
 
 ---
@@ -192,6 +196,7 @@ turn_dispenser/
 │   ├── persistencia.md                    # repositorios / DATABASE_URL
 │   └── VALIDACION_PERSISTENCIA.md         # checklist E2E (D-04)
 │   └── PRUEBAS_INTEGRALES.md              # acta flujo completo (E-02)
+│   └── RUNBOOK_PILOTO.md                  # operación estación piloto (E-03)
 ├── repositories/    # conexión psycopg + ConsultaRepository (D-02)
 ├── supabase/        # config CLI, migrations/, seed.sql
 ├── scripts/         # migraciones locales, smoke y verificación E2E
