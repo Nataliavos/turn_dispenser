@@ -1,14 +1,29 @@
-# Esquema de base de datos (D-01)
+# Esquema de base de datos — contrato v2 (F-01 aplicado)
 
 Persistencia de **hechos oficiales** reportados por RUNT y SIMIT.  
 No hay tablas ni columnas de elegibilidad / “puede tramitar”.
 
-**Stack:** PostgreSQL del stack **Supabase local (Docker)**.  
-**Migraciones:** `supabase/migrations/` (única convención del proyecto).  
-**Arranque del entorno:** [`supabase-local.md`](supabase-local.md).
+> **Diseño completo:** [`DB_DESIGN_V2.md`](DB_DESIGN_V2.md).  
+> **Migraciones:** `supabase/migrations/` — v1 operativa + v2 maestros/hechos.
 
-Versión de contrato de persistencia de cabecera: `consultas.schema_version = '1'`.  
-Versiones de payload por fuente: `resultados_*.schema_version` (= `SCHEMA_VERSION_RUNT` / `SCHEMA_VERSION_SIMIT` en `models/`).
+**Stack:** PostgreSQL del stack **Supabase local (Docker)**.  
+**Arranque del entorno:** [`supabase-local.md`](supabase-local.md).  
+**Aplicar (NTFS / disco externo):** `./scripts/apply_local_migrations.sh` (o `--reset`).
+
+Versión de contrato de cabecera: `consultas.schema_version = '2'` (`SCHEMA_VERSION_CONSULTA`).  
+Versiones de payload por fuente: `resultados_*.schema_version` (= `SCHEMA_VERSION_RUNT` / `SCHEMA_VERSION_SIMIT` en `models/`; aún `1`).
+
+---
+
+## Capas
+
+| Capa | Tablas | Semántica |
+|------|--------|-----------|
+| **A. Operativa** | `consultas`, `resultados_runt`, `resultados_simit`, `eventos_consulta` | Append-only por corrida; snapshots 1:1; timeline |
+| **B. Maestros** | `personas`, `vehiculos`, `persona_vehiculo` | Upsert por clave natural |
+| **C. Hechos tipados** | `licencias`, `infracciones_runt`, `obligaciones_simit`, `acuerdos_pago_simit` | Upsert por UK de negocio / fingerprint |
+
+La app v1 sigue escribiendo capa A; normalización B/C llega en F-02.
 
 ---
 
@@ -16,9 +31,20 @@ Versiones de payload por fuente: `resultados_*.schema_version` (= `SCHEMA_VERSIO
 
 ```mermaid
 erDiagram
-  consultas ||--o| resultados_runt : "1:0..1"
-  consultas ||--o| resultados_simit : "1:0..1"
-  consultas ||--o{ eventos_consulta : "timeline"
+  personas ||--o{ licencias : tiene
+  personas ||--o{ infracciones_runt : tiene
+  personas ||--o{ persona_vehiculo : vinculo
+  vehiculos ||--o{ persona_vehiculo : vinculo
+  personas ||--o{ obligaciones_simit : opcional
+  vehiculos ||--o{ obligaciones_simit : opcional
+  personas ||--o{ acuerdos_pago_simit : opcional
+  vehiculos ||--o{ acuerdos_pago_simit : opcional
+
+  consultas ||--o| resultados_runt : snapshot
+  consultas ||--o| resultados_simit : snapshot
+  consultas ||--o{ eventos_consulta : timeline
+  consultas }o--o| personas : consulta_persona
+  consultas }o--o| vehiculos : consulta_vehiculo
 
   consultas {
     uuid id PK
@@ -26,98 +52,108 @@ erDiagram
     text modo
     text identificador
     text tipo_documento
+    uuid persona_id FK
+    uuid vehiculo_id FK
     text estado
     text schema_version
-    timestamptz iniciado_en
-    timestamptz finalizado_en
   }
 
-  resultados_runt {
+  personas {
     uuid id PK
-    uuid consulta_id FK
-    text schema_version
-    text estado
-    boolean sin_registro
-    boolean tiene_multas_inferidas
-    jsonb secciones
-    text raw_html
+    text tipo_documento UK
+    text numero_documento UK
+    text nombre_completo
   }
 
-  resultados_simit {
+  vehiculos {
     uuid id PK
-    uuid consulta_id FK
-    text schema_version
-    text estado
-    jsonb resumen
-    jsonb comparendos_multas
-    jsonb acuerdos_pago
-    text raw_html
+    text placa UK
   }
 
-  eventos_consulta {
+  obligaciones_simit {
     uuid id PK
-    uuid consulta_id FK
-    text fuente
-    text nivel
-    text mensaje
-    jsonb detalle
+    text numero UK
+    uuid persona_id FK
+    uuid vehiculo_id FK
   }
 ```
 
 ---
 
-## Tablas
+## Capa A — Operativa
 
 ### `consultas`
 
-Cabecera de cada corrida. Mapea `ConsultaParams` + metadatos de `ResultadoConsulta`.
+Cabecera **append-only** de cada corrida. Discriminador de entrada: `modo` ∈ {`DOCUMENTO`,`PLACA`} (no hay `es_placa`).
 
-| Columna | Modelo / uso |
-|---------|----------------|
-| `correlation_id` | `ResultadoConsulta.correlation_id` |
-| `modo` | `DOCUMENTO` \| `PLACA` |
-| `identificador` | número de documento o placa |
-| `tipo_documento` | obligatorio si `modo = DOCUMENTO` |
+| Columna | Uso |
+|---------|-----|
+| `correlation_id` | Logs / UI |
+| `modo` / `identificador` | Entrada normalizada |
+| `tipo_documento` | NOT NULL solo si `modo=DOCUMENTO`; NULL en `PLACA` |
+| `persona_id` / `vehiculo_id` | FK nullable → maestros (poblados en F-02) |
 | `estado` | `en_progreso` \| `ok` \| `parcial` \| `error` \| `omitido` |
-| `operador` / `estacion` | metadatos operativos (opcional; aún no en dataclass) |
-| `iniciado_en` / `finalizado_en` | timestamps de la corrida |
-| `error_runt` / `error_simit` | errores de orquestación por fuente |
-| `schema_version` | contrato de la fila cabecera (RF-16) |
+| `operador` / `estacion` / `app_version` | Metadatos estación |
+| `schema_version` | Contrato cabecera (`2`) |
+| `iniciado_en` / `finalizado_en` / `duracion_ms` | |
+| `error_runt` / `error_simit` | |
 
-**Índices:** `identificador`, `correlation_id`, `created_at desc`, `(modo, estado)`.
+**Índices:** `identificador`, `correlation_id`, `created_at desc`, `(modo, estado)`, `(modo, identificador)`, `persona_id`, `vehiculo_id`.
 
-### `resultados_runt`
+### `resultados_runt` / `resultados_simit`
 
-1:1 con `consultas`. Mapea `ResultadoRunt`. En modo `PLACA` la fila puede omitirse o guardarse con `estado = 'omitido'`.
-
-Columnas tipadas: `nombre`, `estado_licencia`, `tipo_documento`, `numero_documento`, `estado_persona`, `numero_inscripcion`, `fecha_inscripcion`.  
-Payload flexible: `secciones` (JSONB).  
-Heurística: `tiene_multas_inferidas` (no es regla de negocio).  
-Evidencia: `raw_html`.
-
-### `resultados_simit`
-
-1:1 con `consultas`. Mapea `ResultadoSimit`.
-
-| Columna JSONB | Modelo |
-|---------------|--------|
-| `resumen` | `ResumenSimit` |
-| `comparendos_multas` | `list[ComparendoMulta]` |
-| `acuerdos_pago` | `list[AcuerdoPago]` |
-| `total_comparendos_multas` / `total_acuerdos_pago` | `TotalSeccion` |
-| `datos_raw` | `ResultadoSimit.datos_raw` |
+Snapshots **1:1** (`UNIQUE consulta_id`, upsert). Conservan `raw_html`, JSONB de secciones/listas y flags (`sin_registro`, SIMIT `sin_pendientes` en resumen). Los maestros/hechos se **derivan** de aquí; no se eliminan.
 
 ### `eventos_consulta`
 
-Timeline de la corrida (soporte / auditoría). No sustituye logs de archivo; complementa RF de trazabilidad.
+Timeline de automatización (RF-19).
+
+---
+
+## Capa B — Maestros
+
+### `personas`
+
+**UK:** `(tipo_documento, numero_documento)`.  
+Campos: `nombre_completo`, `estado_persona`, `numero_inscripcion_runt`, `fecha_inscripcion_runt` (text), `atributos` jsonb, `first_seen_at` / `last_seen_at`, `last_consulta_id`.
+
+### `vehiculos`
+
+**UK:** `(placa)` normalizada.  
+Campos: `atributos`, `first_seen_at` / `last_seen_at`, `last_consulta_id`.
+
+### `persona_vehiculo`
+
+PK `(persona_id, vehiculo_id)`. `fuente` ∈ {`RUNT`,`SIMIT`,`SISTEMA`}. Solo cuando una fuente asocie persona↔placa.
+
+---
+
+## Capa C — Hechos tipados
+
+### `licencias`
+
+Asociadas a persona. UK parcial: `(persona_id, numero_licencia)` si hay número; si no, `(persona_id, md5(atributos))`.
+
+### `infracciones_runt`
+
+Panel RUNT “MULTAS E INFRACCIONES”. **UK:** `(persona_id, fingerprint)`. `placa` / `vehiculo_id` opcionales.
+
+### `obligaciones_simit`
+
+Comparendos **y** multas SIMIT en una tabla. `persona_id` y `vehiculo_id` **nullable**. UK: `(numero)` si existe; si no, `(fingerprint)`.
+
+### `acuerdos_pago_simit`
+
+Misma lógica de FKs opcionales. UK: `(numero_acuerdo)` o `(fingerprint)`.
 
 ---
 
 ## Fuera de esquema (a propósito)
 
-- Cualquier columna tipo `apto`, `puede_tramitar`, `elegible`, score de decisión.
-- Motor de reglas.
-- Histórico de UI / favoritos del operador (futuro).
+- Cualquier columna `apto`, `puede_tramitar`, `elegible`, score de decisión.
+- `es_placa` (redundante con `consultas.modo`).
+- Tablas separadas comparendos vs multas SIMIT (parser aún no discrimina de forma estable).
+- Motor de reglas / autorización de trámite.
 
 ---
 
@@ -125,27 +161,27 @@ Timeline de la corrida (soporte / auditoría). No sustituye logs de archivo; com
 
 | Tema | Política (piloto local) |
 |------|-------------------------|
-| Qué se guarda | Identificador consultado, hechos extraídos, errores, eventos, opcionalmente `raw_html`. |
-| `raw_html` | Evidencia técnica (re-parseo / soporte). Contiene datos personales. **Retención recomendada ≤ 30 días** en estaciones de desarrollo/piloto. |
-| Borrado | Cascade desde `consultas` borra resultados y eventos. Purge periódico de `raw_html` (null) o borrado de filas > N días — automatizar en tickets posteriores. |
-| Acceso | App de escritorio vía `service_role` / Postgres (D-02). RLS activo; sin políticas `anon` de escritura. |
-| Secretos | Nunca versionar `.env`, keys ni volúmenes Docker. Ver `.gitignore`. |
-| Producción / Cloud | Fuera de D-01; requerirá políticas RLS por estación/rol y rotación de keys. |
+| Qué se guarda | Identificador, hechos, maestros, errores, eventos, opcionalmente `raw_html`. |
+| `raw_html` | Evidencia técnica. Contiene PII. **Retención recomendada ≤ 30 días**. |
+| Borrado persona | Cascade en hechos tipados / `persona_vehiculo`; `consultas.persona_id` → `ON DELETE SET NULL`. |
+| Acceso | App vía `DATABASE_URL` / service_role. RLS activo; sin escritura `anon`. |
+| Secretos | Nunca versionar `.env`, keys ni volúmenes Docker. |
 
 ---
 
 ## Versionado (RF-16)
 
-1. Cambios de forma en `secciones` / payloads tipados → subir `SCHEMA_VERSION_*` en `models/` y persistir en `resultados_*.schema_version`.
+1. Cambios de forma en `secciones` / payloads tipados → subir `SCHEMA_VERSION_*` en `models/` y `resultados_*.schema_version`.
 2. Cambios estructurales de tablas → nueva migración en `supabase/migrations/YYYYMMDDHHMMSS_descripcion.sql`.
-3. Parsers deben degradar con campos opcionales; no asumir HTML estable.
+3. Cabecera con FKs a maestros → `consultas.schema_version` / `SCHEMA_VERSION_CONSULTA = '2'`.
+4. Parsers: campos opcionales; poblar `atributos` antes que romper UK.
 
 ---
 
-## Relación con tickets siguientes
+## Relación con tickets
 
-| Ticket | Uso del esquema |
-|--------|-----------------|
-| **D-02** | Repositorios Python contra estas tablas / `DATABASE_URL` |
-| **D-03** | Persistencia post-consulta desde `ConsultaController` |
-| **D-04** | Verificación end-to-end de filas + `raw_html` |
+| Ticket | Uso |
+|--------|-----|
+| **F-01** | Esta migración + docs (hecho) |
+| **F-02** | Upsert Python maestros/hechos post-snapshot |
+| **F-06** | Backfill opcional desde JSONB de `resultados_*` |

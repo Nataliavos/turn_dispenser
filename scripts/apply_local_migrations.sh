@@ -81,6 +81,14 @@ psql_db() {
 if [[ "${RESET}" -eq 1 ]]; then
   echo "Reset local: dropeando tablas de la app..."
   psql_db <<'SQL'
+-- Hechos tipados y maestros (v2) antes que capa operativa (v1).
+drop table if exists public.acuerdos_pago_simit cascade;
+drop table if exists public.obligaciones_simit cascade;
+drop table if exists public.infracciones_runt cascade;
+drop table if exists public.licencias cascade;
+drop table if exists public.persona_vehiculo cascade;
+drop table if exists public.personas cascade;
+drop table if exists public.vehiculos cascade;
 drop table if exists public.eventos_consulta cascade;
 drop table if exists public.resultados_runt cascade;
 drop table if exists public.resultados_simit cascade;
@@ -94,8 +102,11 @@ create table if not exists supabase_migrations.schema_migrations (
 );
 delete from supabase_migrations.schema_migrations
   where version like '20260728%'
+     or version like '20260803%'
      or name like '%crear_esquema%'
-     or name like '%consultas%';
+     or name like '%consultas%'
+     or name like '%maestros%'
+     or name like '%hechos_tipados%';
 SQL
 fi
 
