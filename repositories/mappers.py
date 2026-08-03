@@ -17,7 +17,7 @@ from models.simit_models import (
     TotalSeccion,
 )
 
-SCHEMA_VERSION_CONSULTA = "1"
+SCHEMA_VERSION_CONSULTA = "2"
 
 _ESTADOS_DB_FUENTE = frozenset({"ok", "parcial", "error", "omitido"})
 _ESTADOS_DB_CONSULTA = frozenset(
