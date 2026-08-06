@@ -126,6 +126,7 @@ Usar **datos de prueba del CRC** (no commitear números reales en el repo).
 - [ ] GUI PLACA: solo SIMIT; RUNT en «—»
 - [ ] Tras error/parcial: botón **Reintentar consulta** funciona
 - [ ] Tras atender: **Nueva consulta** limpia pantalla; **Reintentar** queda deshabilitado; historial BD intacto
+- [ ] PLACA/documento **sin pendientes** SIMIT: respuesta en segundos (no ~1–2 min); log `SIMIT: estado sin pendientes detectado`
 - [ ] En log aparece `Persistencia: guardada (id=…)` o aviso claro si falló BD
 
 ---
@@ -260,6 +261,7 @@ La línea *«Multas inferidas (heurística RUNT, no elegibilidad)»* es un **ind
 | Síntoma | Qué hacer |
 |---------|-----------|
 | `tiempo de espera agotado` en RUNT o SIMIT | Verificar Internet/VPN; reintentar; si persiste, probar el portal en un navegador normal |
+| SIMIT “sin pendientes” tarda ~1–2 min | Ya no debería: la espera usa un timeout **único** (F-04). Si vuelve a pasar, reportar con log `SIMIT: estado sin pendientes` / timeout |
 | Solo una fuente falla | Usar datos de la fuente OK; reintentar consulta completa si se necesita la otra |
 | Ambos fallan | Posible caída de portales o red del CRC — escalar a soporte de sede |
 

@@ -1,14 +1,33 @@
 # services/simit_playwright.py
 # Automatización del portal público SIMIT (https://www.fcm.org.co/simit/#/home-public)
 
+from __future__ import annotations
+
 import re
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
+from typing import Optional
+
+from playwright.sync_api import Locator, Page, sync_playwright, TimeoutError as PWTimeoutError
 
 from config.settings import get_settings
 from services.playwright_helpers import pick_first_working_locator
 from utils.logging_setup import get_logger
 
 logger = get_logger(__name__)
+
+# Selectores de “resultado listo” (cualquiera basta). Se esperan en OR con un
+# solo timeout — no en serie N × SIMIT_RESULTS_TIMEOUT_MS (F-04).
+SELECTOR_RESUMEN_ESTADO = "#resumenEstadoCuenta"
+SELECTOR_MULTA_TABLE = "#multaTable"
+SELECTOR_ACUERDO_TABLE = "#acuerdoTable"
+RE_SIN_PENDIENTES = re.compile(
+    r"No tienes comparendos ni multas|no posee a la fecha pendientes",
+    re.I,
+)
+RE_ESTADO_CUENTA = re.compile(r"Estado de cuenta", re.I)
+
+# Breve asentamiento del DOM Angular tras detectar resultado.
+_SETTLE_MS_OK = 800
+_SETTLE_MS_FALLBACK = 2000
 
 
 def dismiss_promo_modal(page, debug: bool = True) -> None:
@@ -79,43 +98,76 @@ def click_search_button(page, debug: bool = True) -> None:
         logger.debug("Clic en botón de búsqueda SIMIT enviado.")
 
 
+def results_ready_locator(page: Page) -> Locator:
+    """
+    Locator compuesto: el primero visible entre tablas/resumen o mensajes
+    de sin pendientes. Una sola espera compartida (F-04).
+    """
+    return (
+        page.locator(SELECTOR_RESUMEN_ESTADO)
+        .or_(page.locator(SELECTOR_MULTA_TABLE))
+        .or_(page.locator(SELECTOR_ACUERDO_TABLE))
+        .or_(page.get_by_text(RE_SIN_PENDIENTES))
+        .or_(page.get_by_text(RE_ESTADO_CUENTA))
+    )
+
+
+def sin_pendientes_visible(page: Page) -> bool:
+    """True si el portal muestra el mensaje de sin comparendos/multas."""
+    try:
+        loc = page.get_by_text(RE_SIN_PENDIENTES)
+        if loc.count() == 0:
+            return False
+        return bool(loc.first.is_visible())
+    except Exception:
+        return False
+
+
 def wait_for_results(
-    page,
+    page: Page,
     debug: bool = True,
-    timeout_ms: int | None = None,
+    timeout_ms: Optional[int] = None,
 ) -> None:
-    """Espera a que carguen los resultados de la consulta."""
+    """
+    Espera a que carguen los resultados de la consulta.
+
+    Usa un locator OR con **un** ``timeout_ms`` compartido. Antes (bug F-04)
+    se encadenaban ``wait_for_selector`` con timeout completo por candidato,
+    lo que hacía ~N×30s cuando el mensaje “sin pendientes” era el último.
+    """
     if timeout_ms is None:
         timeout_ms = get_settings().simit_results_timeout_ms
 
     if debug:
-        logger.debug("Esperando resultados de SIMIT…")
-
-    result_selectors = [
-        "#resumenEstadoCuenta",
-        "#multaTable",
-        "#acuerdoTable",
-        "text=/No tienes comparendos ni multas/i",
-        "text=/no posee a la fecha pendientes/i",
-        "text=/Estado de cuenta/i",
-    ]
-
-    for selector in result_selectors:
-        try:
-            page.wait_for_selector(selector, timeout=timeout_ms)
-            if debug:
-                logger.debug("Resultado SIMIT detectado (%s).", selector)
-            page.wait_for_timeout(1500)
-            return
-        except PWTimeoutError:
-            continue
-
-    if debug:
-        logger.warning(
-            "No se detectó selector de resultado SIMIT específico; "
-            "capturando HTML de todas formas."
+        logger.debug(
+            "Esperando resultados de SIMIT (timeout único=%sms)…",
+            timeout_ms,
         )
-    page.wait_for_timeout(2000)
+
+    try:
+        results_ready_locator(page).first.wait_for(
+            state="visible",
+            timeout=timeout_ms,
+        )
+        if sin_pendientes_visible(page):
+            logger.info(
+                "SIMIT: estado sin pendientes detectado "
+                "(espera única timeout=%sms).",
+                timeout_ms,
+            )
+        elif debug:
+            logger.debug(
+                "Resultado SIMIT detectado (resumen/tablas u 'Estado de cuenta')."
+            )
+        page.wait_for_timeout(_SETTLE_MS_OK)
+    except PWTimeoutError:
+        if debug:
+            logger.warning(
+                "No se detectó selector de resultado SIMIT específico "
+                "en %sms; capturando HTML de todas formas.",
+                timeout_ms,
+            )
+        page.wait_for_timeout(_SETTLE_MS_FALLBACK)
 
 
 def run_simit_flow(
