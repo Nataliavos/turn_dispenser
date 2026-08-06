@@ -309,7 +309,7 @@ Misma lógica de FKs opcionales `persona_id` / `vehiculo_id`, UK por `numero_acu
 | Dato | Política piloto |
 |------|-----------------|
 | Maestros + hechos tipados | Retener (base del CRC); sin cloud aún |
-| `raw_html` en `resultados_*` | ≤ 30 días o nullify job |
+| `raw_html` en `resultados_*` | ≤ 30 días; nullify con `scripts/purge_raw_html.py` (F-07) |
 | Logs archivo | Según `LOG_FILE` / rotación estación |
 | Delete persona | Cascade hechos tipados; consultas pueden anonimizar FKs (`ON DELETE SET NULL`) |
 

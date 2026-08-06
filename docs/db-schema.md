@@ -162,7 +162,7 @@ Misma lógica de FKs opcionales. UK: `(numero_acuerdo)` o `(fingerprint)`.
 | Tema | Política (piloto local) |
 |------|-------------------------|
 | Qué se guarda | Identificador, hechos, maestros, errores, eventos, opcionalmente `raw_html`. |
-| `raw_html` | Evidencia técnica. Contiene PII. **Retención recomendada ≤ 30 días**. |
+| `raw_html` | Evidencia técnica. Contiene PII. **Retención recomendada ≤ 30 días**. Nullificar con `python scripts/purge_raw_html.py` (ver [`persistencia.md`](persistencia.md) / runbook). |
 | Borrado persona | Cascade en hechos tipados / `persona_vehiculo`; `consultas.persona_id` → `ON DELETE SET NULL`. |
 | Acceso | App vía `DATABASE_URL` / service_role. RLS activo; sin escritura `anon`. |
 | Secretos | Nunca versionar `.env`, keys ni volúmenes Docker. |
@@ -185,3 +185,4 @@ Misma lógica de FKs opcionales. UK: `(numero_acuerdo)` o `(fingerprint)`.
 | **F-01** | Esta migración + docs (hecho) |
 | **F-02** | Upsert Python maestros/hechos post-snapshot |
 | **F-06** | Backfill opcional desde JSONB de `resultados_*` |
+| **F-07** | Nullificar `raw_html` antiguo (`scripts/purge_raw_html.py`) |
