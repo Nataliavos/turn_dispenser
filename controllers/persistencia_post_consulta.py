@@ -1,13 +1,15 @@
 """
-Persistencia síncrona post-consulta (D-03).
+Persistencia síncrona post-consulta (D-03 / F-02).
 
-No tumba la consulta si falla la BD: anota el error en ``ResultadoConsulta``
-y deja los hechos de RUNT/SIMIT disponibles para UI/CLI.
+Orden v2: snapshot capa A (obligatorio si habilitado) → normalización B/C
+best-effort. No tumba la consulta si falla la BD: anota el error en
+``ResultadoConsulta`` y deja los hechos de RUNT/SIMIT disponibles para UI/CLI.
 """
 
 from __future__ import annotations
 
 from typing import Optional
+from uuid import UUID
 
 from config.settings import Settings, get_settings
 from models.consulta_models import ResultadoConsulta
@@ -29,8 +31,11 @@ def intentar_persistir_resultado(
 
     Mutates ``resultado``:
     - ``persistencia_omitida`` si el flag está off
-    - ``persistido`` / ``consulta_db_id`` si OK
-    - ``error_persistencia`` si falla (resultados en memoria se conservan)
+    - ``persistido`` / ``consulta_db_id`` si el snapshot OK
+    - ``error_persistencia`` solo si falla el snapshot (capa A)
+
+    La normalización de maestros/hechos (B/C) es best-effort: si falla,
+    el snapshot permanece y se registra en log/evento con ``cid``.
     """
     cfg = settings or get_settings()
 
@@ -91,6 +96,8 @@ def intentar_persistir_resultado(
             resultado.correlation_id,
             resultado.estado_global,
         )
+
+        _intentar_normalizacion(repo, consulta_id, resultado)
     except PersistenciaError as exc:
         resultado.persistido = False
         resultado.consulta_db_id = None
@@ -115,6 +122,67 @@ def intentar_persistir_resultado(
         )
         logger.error(
             "Persistencia inesperada cid=%s: %s",
+            resultado.correlation_id,
+            exc,
+            exc_info=True,
+        )
+
+
+def _intentar_normalizacion(
+    repo: ConsultaRepository,
+    consulta_id: UUID,
+    resultado: ResultadoConsulta,
+) -> None:
+    """Upsert maestros/hechos tras snapshot; fallos no invalidan capa A."""
+    try:
+        ids = repo.normalizar_maestros_y_hechos(consulta_id, resultado)
+        try:
+            repo.agregar_evento(
+                consulta_id,
+                "Normalización maestros/hechos completada",
+                fuente="SISTEMA",
+                nivel="info",
+                codigo="NORMALIZADO",
+                detalle={
+                    "persona_id": str(ids.get("persona_id") or ""),
+                    "vehiculo_id": str(ids.get("vehiculo_id") or ""),
+                    "correlation_id": resultado.correlation_id,
+                },
+            )
+        except PersistenciaError:
+            logger.warning(
+                "Normalización OK pero falló evento consulta_id=%s cid=%s",
+                consulta_id,
+                resultado.correlation_id,
+            )
+    except PersistenciaError as exc:
+        logger.error(
+            "Normalización B/C fallida consulta_id=%s cid=%s: %s "
+            "(snapshot capa A intacto)",
+            consulta_id,
+            resultado.correlation_id,
+            exc.mensaje,
+            exc_info=True,
+        )
+        try:
+            repo.agregar_evento(
+                consulta_id,
+                "Normalización maestros/hechos fallida",
+                fuente="SISTEMA",
+                nivel="warning",
+                codigo="NORMALIZACION_FALLIDA",
+                detalle={
+                    "error": exc.mensaje,
+                    "correlation_id": resultado.correlation_id,
+                },
+            )
+        except PersistenciaError:
+            pass
+    except Exception as exc:
+        logger.error(
+            "Normalización B/C inesperada consulta_id=%s cid=%s: %s "
+            "(snapshot capa A intacto)",
+            consulta_id,
             resultado.correlation_id,
             exc,
             exc_info=True,

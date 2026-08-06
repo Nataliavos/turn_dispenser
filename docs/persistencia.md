@@ -27,15 +27,19 @@ cp .env.example .env
 Cómo levantar el stack y obtener el DSN: [`supabase-local.md`](supabase-local.md).  
 Esquema: [`db-schema.md`](db-schema.md).
 
-## Flujo post-consulta (D-03)
+## Flujo post-consulta (D-03 / F-02)
 
 1. `ConsultaController.consultar` (GUI) o CLI RUNT finaliza hechos en `ResultadoConsulta`.
-2. `intentar_persistir_resultado` (`controllers/persistencia_post_consulta.py`) guarda vía `ConsultaRepository`.
-3. Política ante fallo de BD/Docker:
-   - **No** se pierde el resultado en pantalla/consola.
-   - Se registra el error con logging (B-02).
-   - UI: aviso en log + `QMessageBox.warning`; CLI: línea `⚠️` en stderr.
+2. `intentar_persistir_resultado` (`controllers/persistencia_post_consulta.py`):
+   1. **Snapshot capa A** (obligatorio si `PERSISTENCIA_ENABLED`): inserta `consultas` + upsert `resultados_runt` / `resultados_simit` + evento `PERSISTIDO`.
+   2. **Normalización capas B/C** (best-effort): upsert maestros (`personas`, `vehiculos`, `persona_vehiculo`) y hechos tipados (`licencias`, `infracciones_runt`, `obligaciones_simit`, `acuerdos_pago_simit`); actualiza `consultas.persona_id` / `vehiculo_id`.
+3. Política ante fallo:
+   - Fallo de **snapshot**: resultados en pantalla; `persistido=False` + `error_persistencia`.
+   - Fallo de **normalización**: el snapshot **permanece**; log/evento con `cid` (`NORMALIZACION_FALLIDA`); no se oculta el resultado en UI.
 4. Persistencia **síncrona** (sin cola). CAPTCHA y paralelismo RUNT∥SIMIT sin cambios.
+
+Misma CC/placa N veces → N filas en `consultas`, 1 maestro (`personas` / `vehiculos`).  
+SIMIT `sin_pendientes`: snapshot OK y **cero** obligaciones nuevas.
 
 Campos en `ResultadoConsulta`: `persistido`, `consulta_db_id`, `error_persistencia`, `persistencia_omitida`.
 
@@ -43,11 +47,13 @@ Campos en `ResultadoConsulta`: `persistido`, `consulta_db_id`, `error_persistenc
 
 - `Database` / `get_database()` — conexión y `ping()`.
 - `ConsultaRepository`:
-  - `persistir_resultado_consulta(ResultadoConsulta)` — inserta cabecera + RUNT/SIMIT.
+  - `persistir_resultado_consulta(ResultadoConsulta)` — snapshot capa A.
+  - `normalizar_maestros_y_hechos(consulta_id, ResultadoConsulta)` — upsert B/C.
   - `crear_consulta` / `actualizar_estado_consulta`
   - `guardar_resultado_runt` / `guardar_resultado_simit`
   - `agregar_evento` / `listar_eventos`
   - `obtener_por_id`
+- Mappers: `repositories/mappers.py` (snapshot) y `repositories/normalizacion_mappers.py` (plan B/C).
 - Errores: `ConexionPersistenciaError`, `PersistenciaError` (logging vía B-02; sin `print` como canal principal).
 
 ## Probar
@@ -61,6 +67,7 @@ python scripts/smoke_persistencia.py
 
 # Unitarios (sin BD) + integración (skip si no hay Postgres)
 pytest tests/test_persistencia_mappers.py \
+       tests/test_normalizacion_mappers.py \
        tests/test_persistencia_integracion.py \
        tests/test_persistencia_post_consulta.py -v
 ```
