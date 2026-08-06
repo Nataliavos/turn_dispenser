@@ -65,6 +65,8 @@ class ConsultaRegistro:
     error_simit: Optional[str]
     resultado_runt: Optional[ResultadoRunt] = None
     resultado_simit: Optional[ResultadoSimit] = None
+    persona_id: Optional[UUID] = None
+    vehiculo_id: Optional[UUID] = None
 
 
 @dataclass
@@ -428,7 +430,7 @@ class ConsultaRepository:
                     """
                     select id, correlation_id, modo, identificador, tipo_documento,
                            estado, schema_version, iniciado_en, finalizado_en,
-                           error_runt, error_simit
+                           error_runt, error_simit, persona_id, vehiculo_id
                       from public.consultas
                      where id = %(id)s
                     """,
@@ -457,6 +459,66 @@ class ConsultaRepository:
             )
             raise PersistenciaError(
                 f"No se pudo leer la consulta {consulta_id}: {exc}",
+                causa=exc,
+            ) from exc
+
+    def listar_consultas_para_backfill(
+        self,
+        *,
+        desde: Optional[datetime] = None,
+        hasta: Optional[datetime] = None,
+        limit: Optional[int] = None,
+        solo_sin_fk: bool = False,
+    ) -> List[UUID]:
+        """
+        IDs de consultas con al menos un snapshot RUNT/SIMIT (F-06).
+
+        ``solo_sin_fk``: DOCUMENTO sin ``persona_id`` o PLACA sin ``vehiculo_id``.
+        Orden: más antiguas primero (``iniciado_en`` / ``created_at``).
+        """
+        try:
+            with self._db.connection() as conn:
+                sql = """
+                    select c.id
+                      from public.consultas c
+                     where (
+                            exists (
+                              select 1 from public.resultados_runt r
+                               where r.consulta_id = c.id
+                            )
+                         or exists (
+                              select 1 from public.resultados_simit s
+                               where s.consulta_id = c.id
+                            )
+                           )
+                       and (%(desde)s::timestamptz is null
+                            or coalesce(c.iniciado_en, c.created_at) >= %(desde)s)
+                       and (%(hasta)s::timestamptz is null
+                            or coalesce(c.iniciado_en, c.created_at) <= %(hasta)s)
+                       and (
+                            not %(solo_sin_fk)s
+                         or (c.modo = 'DOCUMENTO' and c.persona_id is null)
+                         or (c.modo = 'PLACA' and c.vehiculo_id is null)
+                           )
+                     order by coalesce(c.iniciado_en, c.created_at) asc nulls last,
+                              c.id asc
+                """
+                params: Dict[str, Any] = {
+                    "desde": desde,
+                    "hasta": hasta,
+                    "solo_sin_fk": solo_sin_fk,
+                }
+                if limit is not None:
+                    sql += " limit %(limit)s"
+                    params["limit"] = int(limit)
+                rows = conn.execute(sql, params).fetchall()
+                return [as_uuid(r["id"]) for r in rows]
+        except psycopg.Error as exc:
+            logger.error(
+                "Error SQL al listar consultas para backfill: %s", exc, exc_info=True
+            )
+            raise PersistenciaError(
+                f"No se pudieron listar consultas para backfill: {exc}",
                 causa=exc,
             ) from exc
 
@@ -1149,6 +1211,8 @@ class ConsultaRepository:
 
     @staticmethod
     def _consulta_desde_fila(row: Dict[str, Any]) -> ConsultaRegistro:
+        persona_raw = row.get("persona_id")
+        vehiculo_raw = row.get("vehiculo_id")
         return ConsultaRegistro(
             id=as_uuid(row["id"]),
             correlation_id=row.get("correlation_id"),
@@ -1161,4 +1225,6 @@ class ConsultaRepository:
             finalizado_en=row.get("finalizado_en"),
             error_runt=row.get("error_runt"),
             error_simit=row.get("error_simit"),
+            persona_id=as_uuid(persona_raw) if persona_raw else None,
+            vehiculo_id=as_uuid(vehiculo_raw) if vehiculo_raw else None,
         )

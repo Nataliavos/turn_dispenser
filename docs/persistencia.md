@@ -49,11 +49,12 @@ Campos en `ResultadoConsulta`: `persistido`, `consulta_db_id`, `error_persistenc
 - `ConsultaRepository`:
   - `persistir_resultado_consulta(ResultadoConsulta)` — snapshot capa A.
   - `normalizar_maestros_y_hechos(consulta_id, ResultadoConsulta)` — upsert B/C.
+  - `listar_consultas_para_backfill` — IDs con snapshots (F-06).
   - `crear_consulta` / `actualizar_estado_consulta`
   - `guardar_resultado_runt` / `guardar_resultado_simit`
   - `agregar_evento` / `listar_eventos`
   - `obtener_por_id`
-- Mappers: `repositories/mappers.py` (snapshot) y `repositories/normalizacion_mappers.py` (plan B/C).
+- Mappers: `repositories/mappers.py` (snapshot), `repositories/normalizacion_mappers.py` (plan B/C), `repositories/backfill_helpers.py` + `backfill.py` (F-06).
 - Errores: `ConexionPersistenciaError`, `PersistenciaError` (logging vía B-02; sin `print` como canal principal).
 
 ## Probar
@@ -92,3 +93,27 @@ python scripts/verificar_maestros_upsert_e2e.py
 
 Cubre DOCUMENTO/PLACA con N corridas → 1 maestro, obligaciones SIMIT, `sin_pendientes`,  
 ausencia de elegibilidad, `raw_html` y fallo de normalización sin perder snapshot (portales mockeados; Postgres real).
+
+## Backfill de maestros (F-06)
+
+Si hay historial solo en capa A (consultas + `resultados_*`) anterior a F-02,  
+poblar maestros/hechos **sin** re-consultar portales:
+
+```bash
+# Reporte sin escribir (dry-run)
+python scripts/backfill_maestros.py --dry-run
+
+# Ejecución real (idempotente; re-ejecutar no duplica UK)
+python scripts/backfill_maestros.py
+
+# Solo filas sin FK de modo + tope
+python scripts/backfill_maestros.py --solo-sin-fk --limit 200
+
+# Ventana temporal (ISO UTC)
+python scripts/backfill_maestros.py --desde 2026-07-01 --hasta 2026-08-06T12:00:00Z
+```
+
+Reutiliza `normalizar_maestros_y_hechos` (mismos mappers F-02). Errores por  
+`consulta_id` se registran y no abortan el lote; al final: `RESULTADO GLOBAL: PASS|FAIL`.
+
+Tests unitarios (sin BD): `pytest tests/test_backfill_maestros.py -v`.
