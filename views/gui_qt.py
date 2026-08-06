@@ -6,6 +6,7 @@ Vista gráfica (GUI) para consulta RUNT + SIMIT usando PyQt6 + QThread.
 - Modo PLACA: consulta solo SIMIT.
 - CAPTCHA RUNT resuelto manualmente vía diálogo.
 - Reintento de consulta completa tras error/parcial (E-01).
+- Nueva consulta / Limpiar: resetea estado de sesión en pantalla sin borrar BD (F-03).
 
 Limitación (E-01): no hay reintento por fuente individual. RUNT exige CAPTCHA
 manual en el flujo Qt y la orquestación lanza RUNT+SIMIT juntos; mezclar
@@ -229,7 +230,7 @@ class MainWindow(QMainWindow):
 
         self.rb_documento.toggled.connect(self._on_modo_changed)
 
-        # ---- Botones consulta / reintento ----
+        # ---- Botones consulta / reintento / nueva consulta ----
         fila_botones = QHBoxLayout()
         self.btn_consultar = QPushButton("Consultar")
         self.btn_consultar.clicked.connect(self.on_consultar_clicked)
@@ -244,6 +245,14 @@ class MainWindow(QMainWindow):
         )
         self.btn_reintentar.clicked.connect(self.on_reintentar_clicked)
         fila_botones.addWidget(self.btn_reintentar)
+
+        self.btn_nueva_consulta = QPushButton("Nueva consulta")
+        self.btn_nueva_consulta.setToolTip(
+            "Limpia formulario, estados y resultados en pantalla para el "
+            "siguiente ciudadano.\nNo borra el historial en la base de datos."
+        )
+        self.btn_nueva_consulta.clicked.connect(self.on_nueva_consulta_clicked)
+        fila_botones.addWidget(self.btn_nueva_consulta)
         fila_botones.addStretch()
         main_layout.addLayout(fila_botones)
 
@@ -284,6 +293,7 @@ class MainWindow(QMainWindow):
     def _set_controles_consulta_activos(self, activos: bool) -> None:
         self.btn_consultar.setEnabled(activos)
         self.btn_reintentar.setEnabled(activos and self._ultimos_params is not None)
+        self.btn_nueva_consulta.setEnabled(activos)
         self.rb_documento.setEnabled(activos)
         self.rb_placa.setEnabled(activos)
         self.cmb_tipo.setEnabled(activos)
@@ -306,6 +316,24 @@ class MainWindow(QMainWindow):
             return
         self.log("— Reintento de consulta completa —")
         self._iniciar_consulta(self._ultimos_params)
+
+    def on_nueva_consulta_clicked(self) -> None:
+        """Resetea estado de sesión en UI. No elimina filas en BD."""
+        self._ultimos_params = None
+        self.txt_documento.clear()
+        self.txt_placa.clear()
+        self.cmb_tipo.setCurrentIndex(0)
+        self.rb_documento.setChecked(True)
+        self.stack_campos.setCurrentIndex(0)
+
+        self.lbl_progreso_runt.setText("RUNT: —")
+        self.lbl_progreso_simit.setText("SIMIT: —")
+        self.lbl_estado.setText("Listo para consultar.")
+        self.txt_log.clear()
+
+        self._set_controles_consulta_activos(True)
+        self.txt_documento.setFocus()
+        self.log("Sesión limpia — lista para nueva consulta (historial BD intacto).")
 
     def _leer_params_desde_formulario(self) -> Optional[ConsultaParams]:
         if self.rb_documento.isChecked():
