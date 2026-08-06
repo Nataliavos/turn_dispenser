@@ -93,6 +93,10 @@ def test_persistencia_ok() -> None:
     consulta_id = uuid4()
     repo = MagicMock()
     repo.persistir_resultado_consulta.return_value = consulta_id
+    repo.normalizar_maestros_y_hechos.return_value = {
+        "persona_id": uuid4(),
+        "vehiculo_id": None,
+    }
 
     intentar_persistir_resultado(
         resultado,
@@ -104,7 +108,32 @@ def test_persistencia_ok() -> None:
     assert resultado.consulta_db_id == consulta_id
     assert resultado.error_persistencia is None
     repo.persistir_resultado_consulta.assert_called_once()
-    repo.agregar_evento.assert_called_once()
+    repo.normalizar_maestros_y_hechos.assert_called_once_with(
+        consulta_id, resultado
+    )
+    assert repo.agregar_evento.call_count >= 1
+
+
+def test_normalizacion_fallida_no_invalida_snapshot() -> None:
+    resultado = _resultado_doc()
+    consulta_id = uuid4()
+    repo = MagicMock()
+    repo.persistir_resultado_consulta.return_value = consulta_id
+    repo.normalizar_maestros_y_hechos.side_effect = ConexionPersistenciaError(
+        "timeout maestros"
+    )
+
+    intentar_persistir_resultado(
+        resultado,
+        settings=_settings(),
+        repository=repo,
+    )
+
+    assert resultado.persistido is True
+    assert resultado.consulta_db_id == consulta_id
+    assert resultado.error_persistencia is None
+    assert resultado.resultado_runt is not None
+    assert resultado.resultado_runt.nombre == "Ana"
 
 
 def test_persistencia_fallo_conexion_no_tira_resultados() -> None:
