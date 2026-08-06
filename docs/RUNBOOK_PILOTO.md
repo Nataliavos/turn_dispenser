@@ -276,7 +276,27 @@ La línea *«Multas inferidas (heurística RUNT, no elegibilidad)»* es un **ind
 
 Con `PERSISTENCIA_ENABLED=false` la app **no** intenta guardar (útil si BD está en mantenimiento).
 
-### 7.4 Parsers / HTML del portal cambió
+### 7.4 Retención de `raw_html` (PII)
+
+Los HTML de RUNT/SIMIT en `resultados_*` contienen datos personales. Política piloto: **≤ 30 días**.  
+Maestros y hechos tipados **no** se borran.
+
+```bash
+# Desde la raíz del repo, con venv y DATABASE_URL
+python scripts/purge_raw_html.py --dry-run          # cuenta candidatas
+python scripts/purge_raw_html.py                    # nullifica (>30 días)
+python scripts/purge_raw_html.py --days 14 --dry-run
+```
+
+Programación opcional (cron semanal, ejemplo):
+
+```cron
+0 3 * * 0 cd /ruta/al/turn_dispenser && .venv/bin/python scripts/purge_raw_html.py --days 30 >> logs/purge_raw_html.log 2>&1
+```
+
+Detalle: [`persistencia.md`](persistencia.md) · [`db-schema.md`](db-schema.md).
+
+### 7.5 Parsers / HTML del portal cambió
 
 | Síntoma | Qué hacer |
 |---------|-----------|
@@ -284,14 +304,14 @@ Con `PERSISTENCIA_ENABLED=false` la app **no** intenta guardar (útil si BD est�
 | Mensaje de elemento no encontrado / selector | Igual: reintentar una vez; si persiste → incidente a desarrollo |
 | Tests offline fallan tras actualizar fixtures | Fuera de mostrador: ver [`../fixtures/README.md`](../fixtures/README.md) |
 
-### 7.5 Validación de entrada
+### 7.6 Validación de entrada
 
 | Síntoma | Qué hacer |
 |---------|-----------|
 | “Documento inválido” / “Placa inválida” | Corregir formato; la app **no** consultó portales |
 | Tipos soportados | CC, CE, TI, RC, PPT, CD, PA |
 
-### 7.6 App / GUI
+### 7.7 App / GUI
 
 | Síntoma | Qué hacer |
 |---------|-----------|
@@ -381,4 +401,4 @@ No escalar a L3 sin: `cid`, log y descripción de si RUNT, SIMIT o persistencia 
 ## 12. Alcance del piloto (decisión pendiente)
 
 Por defecto este runbook asume **1 estación**.  
-Si el piloto crece a N estaciones: clonar checklist §2 por PC; no compartir el mismo `.env` con keys de producción; coordinar retención de `raw_html` (ver [`db-schema.md`](db-schema.md)).
+Si el piloto crece a N estaciones: clonar checklist §2 por PC; no compartir el mismo `.env` con keys de producción; coordinar retención de `raw_html` con `scripts/purge_raw_html.py` (F-07; ver §7.4).

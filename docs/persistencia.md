@@ -117,3 +117,22 @@ Reutiliza `normalizar_maestros_y_hechos` (mismos mappers F-02). Errores por
 `consulta_id` se registran y no abortan el lote; al final: `RESULTADO GLOBAL: PASS|FAIL`.
 
 Tests unitarios (sin BD): `pytest tests/test_backfill_maestros.py -v`.
+
+## Retención de `raw_html` (F-07)
+
+`resultados_runt.raw_html` / `resultados_simit.raw_html` contienen PII. Política piloto: **≤ 30 días**.  
+Los maestros y hechos tipados se conservan; solo se pone `raw_html = NULL` en snapshots fuera de ventana.
+
+```bash
+# Contar candidatas sin modificar
+python scripts/purge_raw_html.py --dry-run
+
+# Nullificar HTML con más de 30 días (default)
+python scripts/purge_raw_html.py
+
+# Ventana distinta
+python scripts/purge_raw_html.py --days 14 --dry-run
+```
+
+Criterio de edad: `coalesce(consultas.finalizado_en, iniciado_en, resultados_*.created_at)`.  
+Tests: `pytest tests/test_purge_raw_html.py -v`.
