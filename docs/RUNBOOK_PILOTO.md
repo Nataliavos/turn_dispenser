@@ -370,7 +370,8 @@ No escalar a L3 sin: `cid`, log y descripción de si RUNT, SIMIT o persistencia 
 | [`.env.example`](../.env.example) | Plantilla de variables |
 | [`supabase-local.md`](supabase-local.md) | Arranque/parada Supabase + workaround NTFS |
 | [`persistencia.md`](persistencia.md) | Cómo guarda la app |
-| [`VALIDACION_PERSISTENCIA.md`](VALIDACION_PERSISTENCIA.md) | Checklist E2E BD (D-04) |
+| [`VALIDACION_PERSISTENCIA.md`](VALIDACION_PERSISTENCIA.md) | Checklist E2E BD capa A (D-04) |
+| [`VALIDACION_MAESTROS_UPSERT.md`](VALIDACION_MAESTROS_UPSERT.md) | Checklist E2E maestros/upserts v2 (F-05) |
 | [`PRUEBAS_INTEGRALES.md`](PRUEBAS_INTEGRALES.md) | Acta E-02 / go-no-go |
 | [`../INSTRUCCIONES_UBUNTU.md`](../INSTRUCCIONES_UBUNTU.md) | Setup Linux detallado |
 | [`../README.md`](../README.md) | Visión general del producto |
