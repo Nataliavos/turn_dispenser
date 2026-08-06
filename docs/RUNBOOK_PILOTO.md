@@ -125,6 +125,7 @@ Usar **datos de prueba del CRC** (no commitear números reales en el repo).
 - [ ] GUI DOCUMENTO: CAPTCHA manual → resultados RUNT y/o SIMIT
 - [ ] GUI PLACA: solo SIMIT; RUNT en «—»
 - [ ] Tras error/parcial: botón **Reintentar consulta** funciona
+- [ ] Tras atender: **Nueva consulta** limpia pantalla; **Reintentar** queda deshabilitado; historial BD intacto
 - [ ] En log aparece `Persistencia: guardada (id=…)` o aviso claro si falló BD
 
 ---
@@ -191,6 +192,7 @@ No hace falta `db reset` a diario (borra datos locales).
 5. Esperar a que terminen las fuentes (labels `RUNT:` / `SIMIT:`).
 6. Revisar el log: bloques RUNT y SIMIT; mensajes de error si los hay.
 7. Si falló una o ambas fuentes: leer el diálogo de recuperación y usar **Reintentar consulta** (nuevo CAPTCHA).
+8. Para el **siguiente ciudadano**: pulsar **Nueva consulta** (limpia pantalla; no borra historial en BD).
 
 ### 5.2 Consulta por placa (solo SIMIT)
 
@@ -198,8 +200,20 @@ No hace falta `db reset` a diario (borra datos locales).
 2. Digitar placa válida (formatos colombianos).
 3. **Consultar** — no hay CAPTCHA RUNT.
 4. `RUNT: —` es normal en este modo.
+5. Al terminar, **Nueva consulta** antes de atender al siguiente.
 
-### 5.3 Consola (soporte / diagnóstico RUNT)
+### 5.3 Nueva consulta / Limpiar (siguiente ciudadano)
+
+Usar cuando termine de atender a una persona y llegue la siguiente **sin** cerrar la app:
+
+1. Pulsar **Nueva consulta**.
+2. Se vacían documento/placa, se resetean labels `RUNT:` / `SIMIT:`, se limpia el área de resultados y se deshabilita **Reintentar consulta**.
+3. El foco queda en el campo de documento (modo Documento).
+4. Digitar el nuevo identificador y **Consultar** de nuevo.
+
+**Importante:** esta acción **no** elimina filas en Postgres; solo limpia el estado de la sesión en pantalla. No interpreta aptitud ni elegibilidad.
+
+### 5.4 Consola (soporte / diagnóstico RUNT)
 
 ```bash
 python app.py --tipo CC --numero <documento>
@@ -281,7 +295,8 @@ Con `PERSISTENCIA_ENABLED=false` la app **no** intenta guardar (útil si BD est�
 |---------|-----------|
 | No abre GUI | Activar venv; PyQt6 instalado; sesión gráfica |
 | Botón Consultar deshabilitado mucho tiempo | Esperar fin de consulta; si colgó, reiniciar app y reportar con logs |
-| Reintentar deshabilitado | Solo se habilita tras una consulta previa |
+| Reintentar deshabilitado | Solo se habilita tras una consulta previa; **Nueva consulta** lo deshabilita a propósito |
+| Quiere atender al siguiente ciudadano | Pulsar **Nueva consulta** (no reiniciar la app; no borra BD) |
 
 ---
 
