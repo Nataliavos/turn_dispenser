@@ -131,12 +131,15 @@ Sí se versionan: `config.toml`, `migrations/*.sql`, `seed.sql`.
 
 ---
 
-## Criterio de “stack saludable” (aceptación D-01)
+## Criterio de “stack saludable”
 
-1. Contenedor Postgres del stack en `docker ps`.
-2. `\dt public.*` muestra `consultas`, `resultados_runt`, `resultados_simit`, `eventos_consulta`.
-3. Documentación de esquema en [`db-schema.md`](db-schema.md).
-4. Sin columnas de elegibilidad.
+1. Contenedor Postgres del stack en `docker ps` (`supabase_db_*`).
+2. `\dt public.*` muestra capa operativa (`consultas`, `resultados_runt`, `resultados_simit`, `eventos_consulta`) **y** maestros/hechos v2 (`personas`, `vehiculos`, `persona_vehiculo`, `licencias`, `infracciones_runt`, `obligaciones_simit`, `acuerdos_pago_simit`).
+3. Documentación de esquema: [`db-schema.md`](db-schema.md) · diseño: [`DB_DESIGN_V2.md`](DB_DESIGN_V2.md).
+4. Sin columnas de elegibilidad (`apto` / `elegible` / `puede_tramitar`).
+5. Studio abre (URL de `supabase status`, suele ser `http://127.0.0.1:54323`).
+
+Arranque orientado a entrega: [`COMO_CORRER_LOCAL.md`](COMO_CORRER_LOCAL.md).
 
 ---
 

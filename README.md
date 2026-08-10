@@ -5,8 +5,11 @@ Aplicación de escritorio en **Python** que automatiza consultas a plataformas o
 **Pregunta que responde hoy:** *¿Qué reportan RUNT y SIMIT?*  
 **No decide** si un ciudadano puede realizar un trámite (reglas de elegibilidad fuera de alcance).
 
-**Piloto / operación de estación:** [`docs/RUNBOOK_PILOTO.md`](docs/RUNBOOK_PILOTO.md)  
-**Fuente de verdad del producto:** [`docs/product-requirements-document.md`](docs/product-requirements-document.md)
+### Empezar aquí (entrega / máquina nueva)
+
+1. **Correr en local:** [`docs/COMO_CORRER_LOCAL.md`](docs/COMO_CORRER_LOCAL.md) ← guía paso a paso  
+2. **Operación piloto (mostrador):** [`docs/RUNBOOK_PILOTO.md`](docs/RUNBOOK_PILOTO.md)  
+3. **Producto (PRD):** [`docs/product-requirements-document.md`](docs/product-requirements-document.md)
 
 ---
 
@@ -31,6 +34,8 @@ La automatización vive en `services/` y se orquesta desde `controllers/`.
 
 En modo placa, el portal público RUNT no aplica; solo SIMIT.
 
+En la GUI: **Reintentar consulta** (misma entrada) y **Nueva consulta** (limpia pantalla; no borra BD).
+
 ---
 
 ## Stack
@@ -40,17 +45,20 @@ En modo placa, el portal público RUNT no aplica; solo SIMIT.
 - BeautifulSoup4 — parseo HTML
 - PyQt6 — interfaz gráfica
 - python-dotenv — configuración externa (`.env`)
-- Persistencia: **Supabase local con Docker** + capa `repositories/` (psycopg). Integración en orquestación: D-03.
+- Persistencia: **Supabase local con Docker** + `repositories/` (psycopg) — corridas, maestros y hechos tipados
 
-Dependencias de runtime: ver [`requirements.txt`](requirements.txt) (solo paquetes directos).
+Dependencias de runtime: [`requirements.txt`](requirements.txt).
 
 ---
 
 ## Instalación rápida
 
-### Linux / Ubuntu
+La guía completa (Docker, `.env`, migraciones, arranque diario) está en  
+**[`docs/COMO_CORRER_LOCAL.md`](docs/COMO_CORRER_LOCAL.md)**.
 
-Sigue la guía detallada: [`INSTRUCCIONES_UBUNTU.md`](INSTRUCCIONES_UBUNTU.md).
+### Linux / Ubuntu (código + GUI)
+
+Detalle ampliado: [`INSTRUCCIONES_UBUNTU.md`](INSTRUCCIONES_UBUNTU.md).
 
 ```bash
 python3 -m venv .venv
@@ -58,24 +66,43 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 python -m playwright install chromium
+cp .env.example .env
+# Editar .env: BROWSER_HEADLESS=false, DATABASE_URL, PERSISTENCIA_ENABLED
 ```
 
 ### Windows (CMD)
 
 ```cmd
-python -m venv venv
-venv\Scripts\activate.bat
+python -m venv .venv
+.venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 python -m playwright install chromium
+copy .env.example .env
 ```
+
+### Base de datos (obligatoria para guardar historial)
+
+```bash
+# Docker en marcha + Supabase CLI instalado
+supabase start
+supabase status                    # Studio ≈ http://127.0.0.1:54323
+
+# Migraciones (disco local típico):
+supabase db reset
+
+# Si el repo está en NTFS /media/...:
+./scripts/apply_local_migrations.sh
+```
+
+Más detalle: [`docs/supabase-local.md`](docs/supabase-local.md).
 
 ---
 
 ## Ejecución
 
 ```bash
-# GUI
+source .venv/bin/activate   # si no está activo
 python app_gui.py
 
 # Consola — RUNT por documento
@@ -85,31 +112,12 @@ python app.py --tipo CC --numero 1017259440
 **CAPTCHA:** este proyecto no evade mecanismos de seguridad. El CAPTCHA de RUNT se resuelve **manualmente**.
 
 Antes de lanzar automatización, la app valida formato básico:
-- **Documento:** tipo soportado (`CC`, `CE`, `TI`, `RC`, `PPT`, `CD`, `PA`) + número con longitud/caracteres razonables (`utils/documento_validator.py`).
-- **Placa:** formatos colombianos conocidos (`utils/placa_validator.py`).
-
-Pruebas integrales (E-02): [`docs/PRUEBAS_INTEGRALES.md`](docs/PRUEBAS_INTEGRALES.md) · `python scripts/verificar_flujo_integral.py`.  
-Runbook estación piloto (E-03): [`docs/RUNBOOK_PILOTO.md`](docs/RUNBOOK_PILOTO.md).  
-Histórico Fase 1: [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md).
-
----
-
-## Tests de parsers (offline)
-
-Suite sin red ni navegador sobre fixtures HTML anonimizados:
-
-```bash
-pip install -r requirements.txt -r requirements-dev.txt
-pytest tests/test_runt_parser.py tests/test_simit_parser.py -v
-```
-
-Fixtures y guía para capturar/actualizar HTML: [`fixtures/README.md`](fixtures/README.md).
+- **Documento:** tipo soportado (`CC`, `CE`, `TI`, `RC`, `PPT`, `CD`, `PA`) + número (`utils/documento_validator.py`).
+- **Placa:** formatos colombianos (`utils/placa_validator.py`).
 
 ---
 
 ## Configuración
-
-Parámetros de runtime (URLs, timeouts, `slow_mo`, headless, debug, logging) se cargan desde entorno con defaults seguros:
 
 ```bash
 cp .env.example .env
@@ -117,64 +125,54 @@ cp .env.example .env
 ```
 
 - Módulo: `config/settings.py` (`get_settings()`)
-- Logging: `utils/logging_setup.py` (`setup_logging()`, correlation id por consulta)
-- Plantilla versionada: [`.env.example`](.env.example) (sin secretos)
-- `.env` / `.env.local` están ignorados por git
-- Por defecto `BROWSER_HEADLESS=false` (CAPTCHA RUNT manual)
-- `LOG_LEVEL` / `LOG_FILE` opcionales (sin archivo por defecto; solo stderr)
-- Variables `SUPABASE_*` / `DATABASE_URL` / `DB_CONNECT_TIMEOUT_S` / `PERSISTENCIA_ENABLED`
-- Guía: [`docs/persistencia.md`](docs/persistencia.md)
-- Smoke: `python scripts/smoke_persistencia.py`
-- E2E persistencia: `python scripts/verificar_persistencia_e2e.py` · [`docs/VALIDACION_PERSISTENCIA.md`](docs/VALIDACION_PERSISTENCIA.md)
-- Flujo integral: `python scripts/verificar_flujo_integral.py` · [`docs/PRUEBAS_INTEGRALES.md`](docs/PRUEBAS_INTEGRALES.md)
+- Logging: `utils/logging_setup.py` (correlation id por consulta)
+- Plantilla: [`.env.example`](.env.example) (sin secretos)
+- Por defecto `BROWSER_HEADLESS=false` (CAPTCHA manual)
+- Persistencia: `DATABASE_URL`, `PERSISTENCIA_ENABLED` — [`docs/persistencia.md`](docs/persistencia.md)
+
+Scripts útiles:
+
+| Script | Qué hace |
+|--------|----------|
+| `python scripts/smoke_persistencia.py` | Smoke conexión + insert |
+| `python scripts/verificar_persistencia_e2e.py` | E2E capa operativa |
+| `python scripts/verificar_maestros_upsert_e2e.py` | E2E maestros / hechos v2 |
+| `python scripts/verificar_flujo_integral.py` | Flujo integral (mocks) |
+| `python scripts/backfill_maestros.py` | Backfill desde snapshots |
+| `python scripts/purge_raw_html.py` | Retención / nullify `raw_html` |
 
 ---
 
-## Base de datos local (Supabase + Docker)
+## Tests de parsers (offline)
 
 ```bash
-# Requisitos: Docker + Supabase CLI
-supabase start
-supabase db reset   # aplica supabase/migrations + seed
-
-# Workaround si el repo está en NTFS /media/... (Docker no monta):
-./scripts/apply_local_migrations.sh
-# Reaplicar esquema desde cero (solo local):
-./scripts/apply_local_migrations.sh --reset
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests/test_runt_parser.py tests/test_simit_parser.py -v
 ```
 
-- Arranque / parada / variables: [`docs/supabase-local.md`](docs/supabase-local.md)
-- Entidades, índices, retención `raw_html`: [`docs/db-schema.md`](docs/db-schema.md)
+Fixtures: [`fixtures/README.md`](fixtures/README.md).
 
 ---
 
-## Estado del proyecto
+## Estado del proyecto (entrega actual)
 
 ### Implementado
 
 - Automatización Playwright de RUNT (CAPTCHA manual) y SIMIT
-- Parseo estructurado (`runt_parser`, `simit_parser`) con `raw_html`
-- GUI con modos DOCUMENTO / PLACA y orquestación `ConsultaController`
-- Arquitectura por capas: `views` → `controllers` → `services` → `models` / `utils`
-- Dependencias de runtime acotadas (A-02)
-- Configuración externa vía `.env` / defaults (`config/`) (B-01)
-- Logging estructurado con niveles y correlation id (B-02)
-- Validación de entradas de documento (tipo + número) en GUI/CLI (B-03)
-- Manejo unificado de errores por fuente RUNT/SIMIT (B-04)
-- Modelos de dominio tipados / versionados (C-01)
-- Fixtures HTML + tests offline de parsers (C-02)
-- Helpers compartidos parsers/Playwright (C-03)
-- Esquema BD + Supabase local Docker (D-01)
-- Capa de conexión y repositorios Postgres/Supabase (D-02)
-- Persistencia automática post-consulta en GUI/CLI (D-03)
-- Verificación E2E de persistencia documentada (D-04)
-- Pruebas integrales del flujo (E-02)
-- Runbook y checklist de estación piloto (E-03)
+- Parseo estructurado con `raw_html` y fixtures/tests offline
+- GUI: modos DOCUMENTO / PLACA, progreso por fuente, reintento, **Nueva consulta**
+- Configuración `.env`, logging con correlation id, validación de entradas
+- Persistencia post-consulta (capa A: `consultas` + `resultados_*` + eventos)
+- Esquema v2: maestros (`personas`, `vehiculos`) y hechos tipados; normalización post-consulta
+- Backfill desde snapshots y retención de `raw_html`
+- Runbook de estación piloto y scripts de verificación
 
-### Pendiente (alineado al PRD)
+### Fuera de alcance (a propósito)
 
-- Completar pasada manual con portales/CAPTCHA en cada estación (mitigación E-02, §2.6 del runbook)
-- Motor de reglas de elegibilidad (**fuera de alcance** hasta que el negocio lo defina)
+- Motor de reglas de elegibilidad / “puede tramitar”
+- Supabase Cloud / multi-sede con RLS por estación
+- Historial de consultas navegable en la UI
+- CLI con modo placa / SIMIT (solo RUNT por documento)
 
 ---
 
@@ -185,41 +183,32 @@ turn_dispenser/
 ├── app.py / app_gui.py
 ├── config/          # settings desde entorno + defaults
 ├── controllers/     # orquestación (ConsultaController, Runt, Simit)
-├── services/        # Playwright + parsers + helpers compartidos
+├── services/        # Playwright + parsers
 ├── models/          # dataclasses de resultados
 ├── views/           # GUI y consola
-├── utils/           # validación de placa, etc.
-├── docs/
-│   ├── product-requirements-document.md   # PRD oficial
-│   ├── db-schema.md                       # esquema de persistencia
-│   ├── supabase-local.md                  # arranque Supabase + Docker
-│   ├── persistencia.md                    # repositorios / DATABASE_URL
-│   └── VALIDACION_PERSISTENCIA.md         # checklist E2E (D-04)
-│   └── PRUEBAS_INTEGRALES.md              # acta flujo completo (E-02)
-│   └── RUNBOOK_PILOTO.md                  # operación estación piloto (E-03)
-├── repositories/    # conexión psycopg + ConsultaRepository (D-02)
+├── utils/
+├── repositories/    # Postgres (psycopg) + normalización / purge / backfill
 ├── supabase/        # config CLI, migrations/, seed.sql
-├── scripts/         # migraciones locales, smoke y verificación E2E
+├── scripts/         # migraciones locales, smokes, verificaciones
+├── docs/
+│   ├── COMO_CORRER_LOCAL.md           # ← arranque en máquina nueva
+│   ├── RUNBOOK_PILOTO.md
+│   ├── product-requirements-document.md
+│   ├── db-schema.md / DB_DESIGN_V2.md
+│   ├── supabase-local.md
+│   └── persistencia.md
 ├── .env.example
 ├── requirements.txt
-├── requirements-dev.txt
-├── INSTRUCCIONES_UBUNTU.md
-├── WORKFLOW.md
-└── PLAN_DESARROLLO.md   # archivado; ver nota interna
+└── INSTRUCCIONES_UBUNTU.md
 ```
 
 ---
 
 ## Contribución (Git / GitHub)
 
-Flujo recomendado:
-
 1. Actualizar `main`
-2. Crear una rama por ticket con Conventional Commits, p. ej.:
-   - `feat/...`, `fix/...`, `chore/...`, `docs/...`, `refactor/...`, `test/...`
-3. Un ticket ≈ una rama ≈ un PR hacia `main`
-4. Título de commit/PR al estilo: `docs(A-03): alinear documentación al PRD y al código`
-
-No versionar documentos de trabajo personal (tickets internos, auditoría, backlog local). El PRD en `docs/` sí es documentación oficial del producto.
+2. Rama por ticket (`feat/...`, `fix/...`, `docs/...`, …)
+3. Un ticket ≈ una rama ≈ un PR
+4. Conventional Commits
 
 Guía día a día: [`WORKFLOW.md`](WORKFLOW.md).
