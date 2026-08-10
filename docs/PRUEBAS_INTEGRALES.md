@@ -7,7 +7,7 @@ con config/logs y ausencia de lógica de elegibilidad.
 
 **Relacionado:** [`VALIDACION_PERSISTENCIA.md`](VALIDACION_PERSISTENCIA.md) (D-04) ·
 [`persistencia.md`](persistencia.md) · [`supabase-local.md`](supabase-local.md) ·
-[`../PRUEBAS_FASE1.md`](../PRUEBAS_FASE1.md) (histórico Fase 1; **supersedido** por este documento).
+[`RUNBOOK_PILOTO.md`](RUNBOOK_PILOTO.md) (E-03).
 
 ---
 
@@ -156,7 +156,7 @@ Solo se corrigen en E-02 los **blockers** de flujo; el resto se reporta.
 
 1. Completar Nivel C (GUI DOCUMENTO + CAPTCHA + PLACA) con datos de prueba del CRC en la preparación E-03 / runbook.
 2. Asegurar `DATABASE_URL` en `.env` de cada estación (en esta máquina el DSN se exportó en shell; el archivo `.env` local no lo tenía).
-3. `PRUEBAS_FASE1.md` queda histórico; no usarlo como checklist operativo.
+3. Usar este documento (`PRUEBAS_INTEGRALES.md`) como checklist operativo; no depender de guías de Fase 1 archivadas.
 
 ### Defectos encontrados en esta pasada
 

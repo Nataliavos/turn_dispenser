@@ -67,5 +67,5 @@ Un ticket ≈ una rama ≈ un PR hacia `main`.
 ## Referencias
 
 - Producto: [`docs/product-requirements-document.md`](docs/product-requirements-document.md)
-- Plan antiguo (archivado): [`PLAN_DESARROLLO.md`](PLAN_DESARROLLO.md)
-- Pruebas manuales históricas: [`PRUEBAS_FASE1.md`](PRUEBAS_FASE1.md)
+- Arranque local: [`docs/COMO_CORRER_LOCAL.md`](docs/COMO_CORRER_LOCAL.md)
+- Pruebas integrales: [`docs/PRUEBAS_INTEGRALES.md`](docs/PRUEBAS_INTEGRALES.md)
