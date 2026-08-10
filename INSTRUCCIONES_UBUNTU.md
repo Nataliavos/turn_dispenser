@@ -1,6 +1,10 @@
 # Guía: ejecutar turn_dispenser en Ubuntu Linux
 
-Proyecto: **turn_dispenser** (consulta RUNT con Playwright + PyQt6)
+Proyecto: **Turn Dispenser** (consulta RUNT + SIMIT con Playwright + PyQt6 + Supabase local).
+
+> **Entrega / máquina nueva:** la guía canónica paso a paso es  
+> [`docs/COMO_CORRER_LOCAL.md`](docs/COMO_CORRER_LOCAL.md).  
+> Este archivo profundiza en Ubuntu (Qt, Playwright, rutas).
 
 ---
 
@@ -8,20 +12,19 @@ Proyecto: **turn_dispenser** (consulta RUNT con Playwright + PyQt6)
 
 - **Ubuntu** (o derivado: Linux Mint, etc.)
 - **Python 3.10 o superior**
-- **Conexión a internet**
-- Para la **GUI**: entorno gráfico (X11/Wayland) y librerías Qt
+- **Conexión a internet** (portales RUNT/SIMIT)
+- **Entorno gráfico** (X11/Wayland) y librerías Qt para la GUI
+- **Docker** + **Supabase CLI** si quieres guardar historial en Postgres local
 
 ---
 
 ## 1. Comprobar Python
 
-Abre una terminal y verifica:
-
 ```bash
 python3 --version
 ```
 
-Si no tienes Python 3.10+, instálalo:
+Si no tienes Python 3.10+:
 
 ```bash
 sudo apt update
@@ -36,126 +39,148 @@ sudo apt install python3 python3-venv python3-pip
 cd /ruta/donde/esté/turn_dispenser
 ```
 
-Ejemplo:
-
-```bash
-cd ~/TESLA/turn_dispenser
-# o
-cd /media/nataliavos/PROGRAMAS/TESLA/turn_dispenser
-```
-
 ---
 
 ## 3. Crear entorno virtual (solo la primera vez)
 
+Se recomienda el nombre **`.venv`** (alineado al resto de la documentación):
+
 ```bash
-python3 -m venv venv
+python3 -m venv .venv
 ```
 
 ---
 
 ## 4. Activar el entorno virtual
 
-En Linux/Ubuntu se usa `source` (no `activate.bat` como en Windows):
-
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 ```
 
-Si está bien, verás algo como:
-
-```bash
-(venv) usuario@equipo:~/.../turn_dispenser$
-```
+Deberías ver el prefijo `(.venv)` en la terminal.
 
 ---
 
-## 5. Actualizar pip e instalar dependencias
+## 5. Dependencias Python + Chromium
 
 ```bash
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+python -m playwright install chromium
 ```
 
-Si la **GUI** da error por PyQt6, instálalo aparte:
+Si la **GUI** falla por PyQt6:
 
 ```bash
 pip install PyQt6
+sudo apt install libxcb-cursor0 libxkbcommon-x11-0
 ```
 
----
-
-## 6. Instalar Chromium para Playwright
-
-```bash
-python -m playwright install chromium
-```
-
-En Ubuntu a veces hacen falta dependencias del sistema para Chromium. Si `playwright install` falla, ejecuta:
+Si Playwright/Chromium falla:
 
 ```bash
 python -m playwright install-deps chromium
-```
-
-(Si pide contraseña de `sudo`, introdúcela cuando lo pida.)
-
-Luego repite:
-
-```bash
 python -m playwright install chromium
 ```
 
 ---
 
-## 7. Ejecutar el programa
-
-### Con interfaz gráfica (recomendado)
+## 6. Configuración `.env`
 
 ```bash
+cp .env.example .env
+```
+
+Mínimo recomendado:
+
+- `BROWSER_HEADLESS=false` (CAPTCHA RUNT manual)
+- `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres`
+- `PERSISTENCIA_ENABLED=true`
+
+No versionar `.env`.
+
+---
+
+## 7. Base de datos (Supabase + Docker)
+
+```bash
+docker info                 # Docker en marcha
+supabase start
+supabase status             # Studio ≈ http://127.0.0.1:54323
+```
+
+Aplicar esquema:
+
+```bash
+# Disco local típico:
+supabase db reset
+
+# Repo en NTFS / /media/... (workaround):
+./scripts/apply_local_migrations.sh
+```
+
+Detalle: [`docs/supabase-local.md`](docs/supabase-local.md).  
+Smoke: `python scripts/smoke_persistencia.py`.
+
+---
+
+## 8. Ejecutar el programa
+
+### GUI (recomendado)
+
+```bash
+source .venv/bin/activate
 python app_gui.py
 ```
 
-### Solo consola
+### Consola (solo RUNT)
 
 ```bash
 python app.py --tipo CC --numero 1017259440
 ```
 
-Sustituye `CC` y `1017259440` por el tipo y número de documento que quieras consultar.
+Sustituye tipo y número por los datos de prueba.
 
 ---
 
-## 8. CAPTCHA
+## 9. CAPTCHA
 
-- **Consola**: se guarda `captcha.png` y la terminal pide que escribas el texto.
-- **GUI**: se abre una ventana con la imagen y un campo para escribir el texto del CAPTCHA.
+- **Consola:** se guarda `captcha.png` y la terminal pide el texto.
+- **GUI:** diálogo con la imagen y un campo de texto.
+
+Este proyecto **no** evade el CAPTCHA.
 
 ---
 
-## 9. Desactivar el entorno virtual (opcional)
-
-Cuando termines:
+## 10. Arranque diario (resumen)
 
 ```bash
-deactivate
+cd /ruta/a/turn_dispenser
+source .venv/bin/activate
+supabase start          # si no está arriba
+python app_gui.py
 ```
+
+Al terminar (opcional): `supabase stop` · `deactivate`.
 
 ---
 
 ## Resumen rápido (copiar y pegar)
 
 ```bash
-cd /media/nataliavos/PROGRAMAS/TESLA/turn_dispenser
-python3 -m venv venv
-source venv/bin/activate
+cd /ruta/a/turn_dispenser
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-pip install PyQt6
 python -m playwright install chromium
+cp .env.example .env
+# editar .env (BROWSER_HEADLESS=false, DATABASE_URL, PERSISTENCIA_ENABLED)
+supabase start
+./scripts/apply_local_migrations.sh   # o: supabase db reset
+python scripts/smoke_persistencia.py
 python app_gui.py
 ```
-
-(Ajusta la ruta del `cd` a tu carpeta del proyecto.)
 
 ---
 
@@ -163,11 +188,11 @@ python app_gui.py
 
 | Problema | Solución |
 |----------|----------|
-| `python: command not found` | Usa `python3` en lugar de `python`. |
-| Error al importar PyQt6 | `pip install PyQt6` y, si hace falta, `sudo apt install libxcb-cursor0 libxkbcommon-x11-0`. |
-| Playwright no abre Chromium | Ejecuta `python -m playwright install-deps chromium` (con `sudo` si lo pide) y luego `python -m playwright install chromium`. |
-| No se muestra la ventana GUI | Comprueba que tienes sesión gráfica (no solo SSH sin X11). En SSH con X11: `ssh -X` o `ssh -Y`. |
+| `python: command not found` | Usa `python3`. |
+| Error al importar PyQt6 | `pip install PyQt6` y `sudo apt install libxcb-cursor0 libxkbcommon-x11-0`. |
+| Playwright no abre Chromium | `python -m playwright install-deps chromium` y luego `install chromium`. |
+| No se muestra la ventana GUI | Sesión gráfica (no solo SSH sin X11). En SSH: `ssh -X` / `ssh -Y`. |
+| No guarda en BD | Docker + `supabase start` + migraciones + `DATABASE_URL` en `.env`. |
+| `supabase` falla en `/media/...` | Usa `./scripts/apply_local_migrations.sh` (ver `docs/supabase-local.md`). |
 
----
-
-*Este proyecto no evade mecanismos de seguridad. El CAPTCHA se resuelve manualmente.*
+Operación de mostrador: [`docs/RUNBOOK_PILOTO.md`](docs/RUNBOOK_PILOTO.md).

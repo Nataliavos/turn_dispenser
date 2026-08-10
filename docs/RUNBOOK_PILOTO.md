@@ -3,6 +3,9 @@
 Guía operativa para **funcionarios de soporte** y quien prepare una estación en CRC/centro.  
 No hace falta leer el código fuente.
 
+> **Primera instalación en una máquina nueva:** empieza por [`COMO_CORRER_LOCAL.md`](COMO_CORRER_LOCAL.md).  
+> Este runbook asume software ya instalado y se centra en el día a día del piloto.
+
 **Audiencia:** soporte técnico de estación · supervisor de piloto.  
 **Alcance:** una estación de prueba (no despliegue multi-sede).  
 **Validación previa:** veredicto E-02 en [`PRUEBAS_INTEGRALES.md`](PRUEBAS_INTEGRALES.md) (*LISTO CON MITIGACIONES*).  
@@ -39,6 +42,7 @@ Completar §2.6 (prueba con portales) en cada estación antes de considerar el p
 | Navegador Playwright | Chromium vía `python -m playwright install chromium` |
 
 Detalle de instalación Ubuntu: [`../INSTRUCCIONES_UBUNTU.md`](../INSTRUCCIONES_UBUNTU.md).  
+Arranque completo en máquina nueva: [`COMO_CORRER_LOCAL.md`](COMO_CORRER_LOCAL.md).  
 Stack de BD: [`supabase-local.md`](supabase-local.md).
 
 ---
